@@ -36,8 +36,6 @@ import static com.android.launcher3.util.PackageManagerHelper.hasShortcutsPermis
 
 import android.appwidget.AppWidgetProviderInfo;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageInstaller;
@@ -688,13 +686,6 @@ public class LoaderTask implements Runnable {
         // Update pinned state of model shortcuts
         mBgDataModel.updateShortcutPinnedState(context);
 
-        if (!Utilities.isBootCompleted() && !mPendingPackages.isEmpty()) {
-            context.registerReceiver(
-                    new SdCardAvailableReceiver(mApp, mPendingPackages),
-                    new IntentFilter(Intent.ACTION_BOOT_COMPLETED),
-                    null,
-                    MODEL_EXECUTOR.getHandler());
-        }
     }
 
     private List<LauncherActivityInfo> loadAllApps() {

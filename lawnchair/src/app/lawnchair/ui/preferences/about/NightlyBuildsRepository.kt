@@ -42,14 +42,7 @@ class NightlyBuildsRepository(
                 val nightly = releases.firstOrNull { it.tagName == "nightly" }
                 val asset = nightly?.assets?.firstOrNull()
 
-                // As of now the version string looks like this (CI builds only):
-                // <major>.<branch>.(#<CI build number>)
-                // This is done inside build.gradle in the source root. Reflect
-                // changes from there if needed.
-                currentBuildNumber = BuildConfig.VERSION_DISPLAY_NAME
-                    .substringAfterLast("#")
-                    .removeSuffix(")")
-                    .toIntOrNull() ?: 0
+                currentBuildNumber = BuildConfig.VERSION_CODE
                 latestBuildNumber =
                     asset?.name?.substringAfter("_")?.substringBefore("-")?.toIntOrNull() ?: 0
 

@@ -67,7 +67,7 @@ class RestoreBackupViewModel(
             try {
                 val backup = LawnchairBackup(getApplication(), backupUri)
                 backup.readInfoAndPreview()
-                setBackupContents(backup.info.contents)
+                setBackupContents(backup.info.contents and LawnchairBackup.INCLUDE_LAYOUT_AND_SETTINGS)
                 viewModelState.update { it.copy(backup = backup) }
             } catch (t: Throwable) {
                 Log.e("RestoreBackupViewModel", "failed to parse backup", t)

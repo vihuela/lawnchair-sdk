@@ -1,6 +1,5 @@
 package app.lawnchair.ui.preferences.destinations
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -40,17 +39,6 @@ fun FeatureFlagsPreference(modifier: Modifier = Modifier) {
                 title = {
                     Text("To change server flags, update the .aconfig files found at the aconfig/ directory, then rebuild Launcher3.")
                 },
-            )
-        }
-
-        preferenceCategory("Gesture Navigation Sandbox", null)
-        items(
-            gestureSandboxActions,
-            key = { it.title },
-        ) {
-            IntentPreference(
-                label = it.title,
-                intent = it.intent,
             )
         }
 
@@ -127,54 +115,6 @@ fun OnboardingPreference(
         modifier = modifier,
     ) {
         onEdit()
-    }
-}
-
-// gesture sandbox
-private data class GestureSandboxDebugAction(
-    val title: String,
-    val intent: Intent,
-)
-
-private val launchSandboxIntent =
-    Intent("com.android.quickstep.action.GESTURE_SANDBOX")
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-private val gestureSandboxActions: List<GestureSandboxDebugAction> =
-    listOf(
-        GestureSandboxDebugAction(
-            title = "Launch Gesture Tutorial Steps menu",
-            intent = Intent(launchSandboxIntent).putExtra("use_tutorial_menu", true),
-        ),
-        GestureSandboxDebugAction(
-            title = "Launch Back Tutorial",
-            intent = Intent(launchSandboxIntent).putExtra("use_tutorial_menu", false)
-                .putExtra("tutorial_steps", arrayOf("BACK_NAVIGATION")),
-        ),
-        GestureSandboxDebugAction(
-            title = "Launch Home Tutorial",
-            intent = Intent(launchSandboxIntent).putExtra("use_tutorial_menu", false)
-                .putExtra("tutorial_steps", arrayOf("HOME_NAVIGATION")),
-        ),
-        GestureSandboxDebugAction(
-            title = "Launch Overview Tutorial",
-            intent = Intent(launchSandboxIntent).putExtra("use_tutorial_menu", false)
-                .putExtra("tutorial_steps", arrayOf("OVERVIEW_NAVIGATION")),
-        ),
-    )
-
-@Composable
-private fun IntentPreference(
-    label: String,
-    intent: Intent,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    ClickablePreference(
-        label = label,
-        modifier = modifier,
-    ) {
-        context.startActivity(intent)
     }
 }
 

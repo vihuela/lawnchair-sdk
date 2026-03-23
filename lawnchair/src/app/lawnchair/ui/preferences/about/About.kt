@@ -135,7 +135,7 @@ fun About(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = BuildConfig.VERSION_DISPLAY_NAME,
+                    text = BuildConfig.VERSION_NAME,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

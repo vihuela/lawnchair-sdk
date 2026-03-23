@@ -34,10 +34,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
-import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
 import app.lawnchair.compat.LawnchairQuickstepCompat
 import app.lawnchair.data.AppDatabase
-import app.lawnchair.data.wallpaper.service.WallpaperService
 import app.lawnchair.factory.LawnchairWidgetHolder
 import app.lawnchair.gestures.GestureController
 import app.lawnchair.gestures.VerticalSwipeTouchController
@@ -45,8 +43,6 @@ import app.lawnchair.gestures.config.GestureHandlerConfig
 import app.lawnchair.nexuslauncher.OverlayCallbackImpl
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
-import app.lawnchair.root.RootHelperManager
-import app.lawnchair.root.RootNotAvailableException
 import app.lawnchair.theme.ThemeProvider
 import app.lawnchair.ui.popup.LauncherOptionsPopup
 import app.lawnchair.ui.popup.LawnchairShortcut
@@ -68,7 +64,6 @@ import com.android.launcher3.statemanager.StateManager
 import com.android.launcher3.statemanager.StateManager.StateHandler
 import com.android.launcher3.uioverrides.QuickstepLauncher
 import com.android.launcher3.uioverrides.states.AllAppsState
-import com.android.launcher3.uioverrides.states.BackgroundAppState
 import com.android.launcher3.uioverrides.states.OverviewState
 import com.android.launcher3.util.ActivityOptionsWrapper
 import com.android.launcher3.util.Executors
@@ -119,23 +114,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         }
         override fun onStateTransitionComplete(finalState: LauncherState) {}
     }
-    private val statusBarClockListener = object : StateManager.StateListener<LauncherState> {
-        override fun onStateTransitionStart(toState: LauncherState) {
-            when (toState) {
-                is BackgroundAppState,
-                is OverviewState,
-                is AllAppsState,
-                -> {
-                    LawnchairApp.instance.restoreClockInStatusBar()
-                }
-
-                else -> {
-                    workspace.updateStatusbarClock()
-                }
-            }
-        }
-        override fun onStateTransitionComplete(finalState: LauncherState) {}
-    }
     private val clearSearchStateListener = object : StateManager.StateListener<LauncherState> {
         override fun onStateTransitionComplete(finalState: LauncherState) {
             if (finalState == LauncherState.NORMAL && mAppsView != null && mAppsView.isSearching) {
@@ -170,15 +148,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         }.launchIn(scope = lifecycleScope)
         launcher.stateManager.addStateListener(clearSearchStateListener)
 
-        if (prefs.autoLaunchRoot.get()) {
-            lifecycleScope.launch {
-                try {
-                    RootHelperManager.INSTANCE.get(this@LawnchairLauncher)
-                } catch (_: RootNotAvailableException) {
-                }
-            }
-        }
-
         preferenceManager2.showStatusBar.get().distinctUntilChanged().onEach {
             with(insetsController) {
                 if (it) {
@@ -196,17 +165,6 @@ class LawnchairLauncher : QuickstepLauncher() {
             }
         }.launchIn(scope = lifecycleScope)
 
-        preferenceManager2.statusBarClock.get().onEach {
-            with(launcher.stateManager) {
-                if (it) {
-                    addStateListener(statusBarClockListener)
-                } else {
-                    removeStateListener(statusBarClockListener)
-                    // Make sure status bar clock is restored when the preference is toggled off
-                    LawnchairApp.instance.restoreClockInStatusBar()
-                }
-            }
-        }
         preferenceManager2.rememberPosition.get().onEach {
             with(launcher.stateManager) {
                 if (it) {
@@ -246,8 +204,6 @@ class LawnchairLauncher : QuickstepLauncher() {
         }
 
         colorScheme = themeProvider.colorScheme
-
-        showQuickstepWarningIfNecessary()
 
         reloadIconsIfNeeded()
 
@@ -324,49 +280,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun showDefaultOptions(x: Float, y: Float) {
-        val showWallpaperCarousel = "+carousel" in preferenceManager2.launcherPopupOrder.firstBlocking()
-
-        if (showWallpaperCarousel) {
-            show<LawnchairLauncher>(
-                this,
-                getPopupTarget(x, y),
-                OptionsPopupView.getOptions(this),
-            )
-        } else {
-            super.showDefaultOptions(x, y)
-        }
-    }
-
-    private fun <T> show(
-        activityContext: ActivityContext?,
-        targetRect: RectF,
-        items: List<OptionItem>,
-        shouldAddArrow: Boolean = false,
-        width: Int = 0,
-    ): OptionsPopupView<T>? where T : Context?, T : ActivityContext? {
-        if (activityContext == null) return null
-
-        val isEmpty = WallpaperService.INSTANCE.get(this).getTopWallpapers().isEmpty()
-        val layout = if (isEmpty) R.layout.longpress_options_menu else R.layout.wallpaper_options_popup
-
-        val popup = activityContext.layoutInflater.inflate(layout, activityContext.dragLayer, false) as OptionsPopupView<T>
-        popup.setTargetRect(targetRect)
-        popup.setShouldAddArrow(shouldAddArrow)
-
-        for (item in items) {
-            val deepLayout = if (isEmpty) R.layout.system_shortcut else R.layout.wallpaper_options_popup_item
-
-            val view = popup.inflateAndAdd<DeepShortcutView>(deepLayout, popup)
-            if (width > 0) view.layoutParams.width = width
-            view.iconView.setBackgroundDrawable(item.icon)
-            view.bubbleText.text = item.label
-            view.setOnClickListener(popup)
-            view.onLongClickListener = popup
-            popup.mItemMap[view] = item
-        }
-
-        popup.show()
-        return popup
+        super.showDefaultOptions(x, y)
     }
 
     override fun createAppWidgetHolder(): LauncherWidgetHolder {

@@ -39,7 +39,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
-import app.lawnchair.LawnchairApp
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.backup.ui.restoreBackupOpener
 import app.lawnchair.preferences.getAdapter
@@ -68,7 +67,6 @@ import app.lawnchair.ui.preferences.navigation.General
 import app.lawnchair.ui.preferences.navigation.Gestures
 import app.lawnchair.ui.preferences.navigation.HomeScreen
 import app.lawnchair.ui.preferences.navigation.PreferenceRootRoute
-import app.lawnchair.ui.preferences.navigation.Quickstep
 import app.lawnchair.ui.preferences.navigation.Search
 import app.lawnchair.ui.preferences.navigation.Smartspace
 import app.lawnchair.ui.theme.isSelectedThemeDark
@@ -176,19 +174,9 @@ fun PreferencesDashboard(
                 isSelected = currentRoute is Gestures,
             )
 
-            if (LawnchairApp.isRecentsEnabled || BuildConfig.DEBUG) {
-                PreferenceCategory(
-                    label = stringResource(id = R.string.quickstep_label),
-                    description = stringResource(id = R.string.quickstep_description),
-                    iconResource = R.drawable.ic_quickstep,
-                    onNavigate = { onNavigate(Quickstep) },
-                    isSelected = currentRoute is Quickstep,
-                )
-            }
-
             PreferenceCategory(
                 label = stringResource(R.string.about_label),
-                description = "${context.getString(R.string.derived_app_name)} ${BuildConfig.MAJOR_VERSION}",
+                description = "${context.getString(R.string.derived_app_name)} ${BuildConfig.VERSION_NAME}",
                 iconResource = R.drawable.ic_about,
                 onNavigate = { onNavigate(About) },
                 isSelected = currentRoute is About,

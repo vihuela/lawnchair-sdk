@@ -39,9 +39,6 @@ import kotlinx.coroutines.launch
 
 val options = listOf(
     GestureHandlerOption.NoOp,
-    GestureHandlerOption.Sleep,
-    GestureHandlerOption.Recents,
-    GestureHandlerOption.OpenNotifications,
     GestureHandlerOption.OpenAppDrawer,
     GestureHandlerOption.OpenAppSearch,
     GestureHandlerOption.OpenSearch,

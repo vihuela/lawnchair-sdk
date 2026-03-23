@@ -1,4 +1,3 @@
-import app.cash.licensee.SpdxId
 import com.android.build.gradle.api.AndroidBasePlugin
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -15,24 +14,32 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.ksp)
     alias(libs.plugins.google.protobuf)
-    alias(libs.plugins.cash.licensee)
     alias(libs.plugins.rikka.refine)
     alias(libs.plugins.diffplug.spotless)
 }
 
+final def appCompileSdk = 36
+final def appCompileSdkMinor = 1
+final def appMinSdk = 26
+final def appTargetSdk = 35
+final def appVersionCode = 1
+final def appVersionName = "1"
+final def buildCommit = providers.exec {
+    commandLine('git', 'rev-parse', '--short=7', 'HEAD')
+}.standardOutput.asText.get().trim()
 
 allprojects {
     plugins.withType(AndroidBasePlugin).configureEach {
         android {
             buildToolsVersion "36.1.0"
             compileSdk {
-                version = release(36) {
-                    minorApiLevel = 1
+                version = release(appCompileSdk) {
+                    minorApiLevel = appCompileSdkMinor
                 }
             }
             defaultConfig {
-                minSdk 26
-                targetSdk 35
+                minSdk appMinSdk
+                targetSdk appTargetSdk
                 vectorDrawables.useSupportLibrary = true
             }
             lint {
@@ -135,45 +142,19 @@ allprojects {
     }
 }
 
-final def buildCommit = providers.exec {
-    commandLine('git', 'rev-parse', '--short=7', 'HEAD')
-}.standardOutput.asText.get().trim()
-
-final def ciBuild = System.getenv("CI") == "true"
-final def ciRef = System.getenv("GITHUB_REF") ?: ""
-final def ciRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: ""
-final def isReleaseBuild = ciBuild && ciRef.contains("beta")
-final def devReleaseName = ciBuild ? "Dev.(#${ciRunNumber})" : "Dev.(${buildCommit})"
-final def version = "15"
-final def releaseName = "Beta 2.1"
-final def versionDisplayName = "${version}.${isReleaseBuild ? releaseName : devReleaseName}"
-final def majorVersion = versionDisplayName.split("\\.")[0]
-
-final def quickstepMinSdk = "29"
-final def quickstepMaxSdk = "35"
-
 android {
     namespace "com.android.launcher3"
     defaultConfig {
-        // Lawnchair Launcher 15.0 Beta 2.1
-        // See CONTRIBUTING.md#versioning-scheme
-        versionCode 15_00_02_02_01
-        versionName "${versionDisplayName}"
-        buildConfigField "String", "VERSION_DISPLAY_NAME", "\"${versionDisplayName}\""
-        buildConfigField "String", "MAJOR_VERSION", "\"${majorVersion}\""
+        versionCode appVersionCode
+        versionName appVersionName
         buildConfigField "String", "COMMIT_HASH", "\"${buildCommit}\""
-        buildConfigField "boolean", "ENABLE_AUTO_INSTALLS_LAYOUT", "false"
-
-        manifestPlaceholders.quickstepMinSdk = quickstepMinSdk
-        manifestPlaceholders.quickstepMaxSdk = quickstepMaxSdk
-        buildConfigField "int", "QUICKSTEP_MIN_SDK", quickstepMinSdk
-        buildConfigField "int", "QUICKSTEP_MAX_SDK", quickstepMaxSdk
+        buildConfigField "int", "QUICKSTEP_MIN_SDK", "${appMinSdk}"
+        buildConfigField "int", "QUICKSTEP_MAX_SDK", "${appTargetSdk}"
     }
 
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach {
-            def channel = variant.productFlavors.last().name
-            outputFileName = "Lawnchair.${variant.versionName}.$channel.${variant.buildType.name}.apk"
+            outputFileName = "Lawnchair.${variant.versionName}.${variant.buildType.name}.apk"
         }
     }
 
@@ -229,16 +210,6 @@ android {
     buildTypes {
         all {
             signingConfig releaseSigning
-
-            applicationVariants.configureEach { variant ->
-                variant.outputs.configureEach {
-                    def channel = variant.productFlavors.last().name
-                    // Override signingConfig to debug if the "nightly" flavor is selected
-                    if (channel.any { it == "nightly" }) {
-                        signingConfig = signingConfigs.debug
-                    }
-                }
-            }
             pseudoLocalesEnabled true
         }
 
@@ -274,23 +245,11 @@ android {
 
         withQuickstep {
             dimension "recents"
-            minSdk 26
         }
 
         github {
             applicationId 'app.lawnchair'
             dimension "channel"
-        }
-
-        nightly {
-            applicationId 'app.lawnchair.nightly'
-            dimension "channel"
-        }
-
-        play {
-            applicationId "app.lawnchair.play"
-            dimension "channel"
-            isDefault true
         }
 
         configureEach {
@@ -325,19 +284,7 @@ android {
             manifest.srcFile "github/AndroidManifest.xml"
         }
 
-        nightly {
-            manifest.srcFile "nightly/AndroidManifest.xml"
-        }
-
         lawnWithQuickstepGithub {
-            manifest.srcFile "quickstep/AndroidManifest-launcher.xml"
-        }
-
-        lawnWithQuickstepNightly {
-            manifest.srcFile "quickstep/AndroidManifest-launcher.xml"
-        }
-
-        lawnWithQuickstepPlay {
             manifest.srcFile "quickstep/AndroidManifest-launcher.xml"
         }
 
@@ -435,8 +382,6 @@ dependencies {
     implementation libs.bundles.room
     ksp libs.room.compiler
 
-    implementation libs.libsu.service
-
     // Persian Date
     implementation libs.persian.date
 
@@ -476,18 +421,4 @@ spotless {
             "ktlint_compose_content-slot-reused": "disabled",
         ])
     }
-}
-
-licensee {
-    allow(SpdxId.Apache_20)
-    allow(SpdxId.BSD_3_Clause)
-    allow(SpdxId.GPL_20_or_later)
-    allowDependency(libs.libsu.core)
-    allowDependency(libs.libsu.service)
-    allowUrl("https://github.com/patrykmichalik/opto/blob/master/LICENSE")
-    allowUrl("https://github.com/RikkaApps/HiddenApiRefinePlugin/blob/main/LICENSE")
-    allowUrl("https://opensource.org/licenses/mit-license.php")
-
-    bundleAndroidAsset = true
-    androidAssetReportPath = 'licenses.json'
 }

@@ -9,9 +9,7 @@ import app.lawnchair.search.adapter.SearchTargetFactory
 import app.lawnchair.search.algorithms.engine.ActionsSectionBuilder
 import app.lawnchair.search.algorithms.engine.AppsAndShortcutsSectionBuilder
 import app.lawnchair.search.algorithms.engine.CalculationSectionBuilder
-import app.lawnchair.search.algorithms.engine.ContactsSectionBuilder
 import app.lawnchair.search.algorithms.engine.EmptyStateSectionBuilder
-import app.lawnchair.search.algorithms.engine.FilesSectionBuilder
 import app.lawnchair.search.algorithms.engine.HistorySectionBuilder
 import app.lawnchair.search.algorithms.engine.SearchProvider
 import app.lawnchair.search.algorithms.engine.SearchResult
@@ -20,8 +18,6 @@ import app.lawnchair.search.algorithms.engine.SectionBuilder
 import app.lawnchair.search.algorithms.engine.SettingsSectionBuilder
 import app.lawnchair.search.algorithms.engine.WebSuggestionsSectionBuilder
 import app.lawnchair.search.algorithms.engine.provider.CalculatorSearchProvider
-import app.lawnchair.search.algorithms.engine.provider.ContactsSearchProvider
-import app.lawnchair.search.algorithms.engine.provider.FileSearchProvider
 import app.lawnchair.search.algorithms.engine.provider.HistorySearchProvider
 import app.lawnchair.search.algorithms.engine.provider.SettingsSearchProvider
 import app.lawnchair.search.algorithms.engine.provider.ShortcutSearchProvider
@@ -55,8 +51,6 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
 
     private val searchProviders: List<SearchProvider> = listOf(
         SettingsSearchProvider,
-        FileSearchProvider,
-        ContactsSearchProvider,
         WebSuggestionProvider,
     )
 
@@ -168,8 +162,6 @@ class LawnchairLocalSearchAlgorithm(context: Context) : LawnchairSearchAlgorithm
         AppsAndShortcutsSectionBuilder,
         CalculationSectionBuilder,
         WebSuggestionsSectionBuilder,
-        ContactsSectionBuilder,
-        FilesSectionBuilder,
         SettingsSectionBuilder,
         HistorySectionBuilder,
         ActionsSectionBuilder,

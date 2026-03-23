@@ -1,8 +1,6 @@
 package app.lawnchair.ui.preferences.components.search
 
-import android.Manifest
 import android.provider.SearchRecentSuggestions
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.annotation.Keep
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,11 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -28,7 +21,6 @@ import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
 import app.lawnchair.search.LawnchairRecentSuggestionProvider
-import app.lawnchair.ui.preferences.components.PermissionDialog
 import app.lawnchair.ui.preferences.components.controls.ClickablePreference
 import app.lawnchair.ui.preferences.components.controls.MainSwitchPreference
 import app.lawnchair.ui.preferences.components.controls.SliderPreference
@@ -37,12 +29,7 @@ import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
 import app.lawnchair.ui.preferences.components.layout.PreferenceTemplate
 import app.lawnchair.ui.theme.dividerColor
-import app.lawnchair.util.openAppPermissionSettings
 import com.android.launcher3.R
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
-import com.google.accompanist.permissions.shouldShowRationale
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -50,7 +37,6 @@ import kotlinx.serialization.Serializable
 enum class SearchProviderId(val id: String) {
     APPS("apps"),
     CALCULATOR("calculator"),
-    CONTACTS("contacts"),
     FILES("files"),
     HISTORY("history"),
     SETTINGS("settings"),
@@ -61,7 +47,6 @@ fun getProviderName(provider: SearchProviderId): Int {
     return when (provider) {
         SearchProviderId.APPS -> R.string.search_pref_result_apps_and_shortcuts_title
         SearchProviderId.CALCULATOR -> R.string.all_apps_search_result_calculator
-        SearchProviderId.CONTACTS -> R.string.search_pref_result_people_title
         SearchProviderId.FILES -> R.string.search_pref_result_files_title
         SearchProviderId.HISTORY -> R.string.search_pref_result_history_title
         SearchProviderId.SETTINGS -> R.string.search_pref_result_settings_title
@@ -117,64 +102,9 @@ fun SearchProviderPreferenceScreen(
         modifier = modifier,
     ) {
         when (provider) {
-            SearchProviderId.CONTACTS -> ContactsSearchProvider()
             SearchProviderId.FILES -> FileSearchProvider()
             else -> GenericSearchProviderPreference(provider)
         }
-    }
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-fun ContactsSearchProvider(
-    modifier: Modifier = Modifier,
-) {
-    val prefs = preferenceManager()
-    val prefs2 = preferenceManager2()
-
-    val context = LocalContext.current
-    val contactsPermissionState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
-
-    var showPermissionDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(contactsPermissionState.status) {
-        if (!contactsPermissionState.status.isGranted) {
-            showPermissionDialog = true
-        }
-    }
-
-    val adapter = prefs.searchResultPeople.getAdapter()
-    MainSwitchPreference(
-        checked = adapter.state.value && contactsPermissionState.status.isGranted,
-        onCheckedChange = adapter::onChange,
-        label = stringResource(R.string.search_pref_result_people_title),
-        modifier = modifier,
-        enabled = contactsPermissionState.status.isGranted,
-    ) {
-        PreferenceGroup {
-            SliderPreference(
-                label = stringResource(R.string.max_people_result_count_title),
-                adapter = prefs2.maxPeopleResultCount.getAdapter(),
-                valueRange = 2..10,
-                step = 1,
-            )
-        }
-    }
-
-    if (showPermissionDialog) {
-        val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-
-        PermissionDialog(
-            title = stringResource(R.string.warn_contact_permission_title),
-            text = stringResource(id = R.string.warn_contact_permission_content, stringResource(id = R.string.derived_app_name)),
-            isPermanentlyDenied = contactsPermissionState.status.shouldShowRationale,
-            onConfirm = { contactsPermissionState.launchPermissionRequest() },
-            onDismiss = {
-                backDispatcher?.onBackPressed()
-                showPermissionDialog = false
-            },
-            onGoToSettings = { context.openAppPermissionSettings() },
-        )
     }
 }
 

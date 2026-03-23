@@ -51,9 +51,6 @@ data class Search(val selectedId: SearchRoute = SearchRoute.DOCK_SEARCH) : Prefe
 data object Folders : PreferenceRootRoute
 
 @Serializable
-data object Quickstep : PreferenceRootRoute
-
-@Serializable
 data object Gestures : PreferenceRootRoute
 
 @Serializable

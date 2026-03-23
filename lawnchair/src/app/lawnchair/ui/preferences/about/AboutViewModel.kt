@@ -31,8 +31,6 @@ class AboutViewModel(
     init {
         _uiState.update {
             it.copy(
-                versionName = BuildConfig.VERSION_NAME,
-                commitHash = BuildConfig.COMMIT_HASH,
                 coreTeam = team,
                 supportAndPr = supportAndPr,
                 topLinks = topLinks,
@@ -141,7 +139,7 @@ class AboutViewModel(
             ),
             TeamMember(
                 name = "Rhyse Simpson",
-                role = Role.QuickSwitchMaintenance,
+                role = Role.Development,
                 photoUrl = "https://avatars.githubusercontent.com/u/7065700",
                 socialUrl = "https://x.com/skittles9823",
             ),

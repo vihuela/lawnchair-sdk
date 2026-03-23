@@ -12,16 +12,12 @@ import java.io.File
  * including application version details, team member lists, relevant links,
  * and the current state of the update checker.
  *
- * @param versionName The current version name of the application.
- * @param commitHash The commit hash of the current build.
  * @param coreTeam A list of [TeamMember] objects representing the core development team.
  * @param supportAndPr A list of [TeamMember] objects representing those involved in support and public relations.
  * @param topLinks A list of [Link] objects representing useful external links (e.g., social media, website).
  * @param updateState The current [UpdateState] of the application's update checker.
  */
 data class AboutUiState(
-    val versionName: String = "",
-    val commitHash: String = "",
     val coreTeam: List<TeamMember> = emptyList(),
     val supportAndPr: List<TeamMember> = emptyList(),
     val topLinks: List<Link> = emptyList(),
@@ -62,7 +58,6 @@ data class TeamMember(
 enum class Role(val descriptionResId: Int) {
     Development(descriptionResId = R.string.development),
     DevOps(descriptionResId = R.string.devops),
-    QuickSwitchMaintenance(descriptionResId = R.string.quickswitch_maintenance),
     Support(descriptionResId = R.string.support),
     SupportAndPr(descriptionResId = R.string.support_and_pr),
 }

@@ -35,7 +35,6 @@ import com.android.quickstep.util.LayoutUtils;
 import com.android.quickstep.views.RecentsView;
 import com.android.quickstep.views.TaskView;
 
-import app.lawnchair.preferences.PreferenceManager;
 import app.lawnchair.theme.color.tokens.ColorTokens;
 
 /**
@@ -115,9 +114,6 @@ public class OverviewState extends LauncherState {
 
     @Override
     public int getVisibleElements(Launcher launcher) {
-        if (PreferenceManager.getInstance(launcher).getRecentsActionClearAll().get()) {
-            return OVERVIEW_ACTIONS;
-        }
         int elements = CLEAR_ALL_BUTTON | OVERVIEW_ACTIONS;
         DeviceProfile dp = launcher.getDeviceProfile();
         boolean showFloatingSearch;

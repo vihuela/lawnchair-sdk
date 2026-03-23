@@ -18,7 +18,6 @@ android {
         lawn { dimension = "app" }
         withQuickstep { dimension = "recents" }
         github { dimension = "channel" }
-        play { dimension = "channel" }
     }
 
     testOptions.managedDevices.localDevices {

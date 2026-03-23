@@ -21,33 +21,18 @@ import android.app.Activity
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.requiredWidth
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
 import app.lawnchair.preferences.PreferenceManager
-import app.lawnchair.ui.ModalBottomSheetContent
-import app.lawnchair.ui.preferences.destinations.openAppInfo
 import app.lawnchair.util.restartLauncher
 import app.lawnchair.util.unsafeLazy
-import app.lawnchair.views.ComposeBottomSheet
 import com.android.launcher3.BuildConfig
 import com.android.launcher3.InvariantDeviceProfile
-import com.android.launcher3.Launcher
-import com.android.launcher3.R
 import com.android.launcher3.Utilities
 import com.android.quickstep.RecentsActivity
 import com.android.systemui.shared.system.QuickStepContract
@@ -58,7 +43,6 @@ class LawnchairApp : Application() {
     private val isRecentsComponent: Boolean by unsafeLazy { checkRecentsComponent() }
     private val recentsEnabled: Boolean get() = compatible && isRecentsComponent
     private val isAtleastT = Utilities.ATLEAST_T
-    internal var accessibilityService: LawnchairAccessibilityService? = null
     val isVibrateOnIconAnimation: Boolean by unsafeLazy { getSystemUiBoolean("config_vibrateOnIconAnimation", false) }
 
     override fun onCreate() {
@@ -66,31 +50,6 @@ class LawnchairApp : Application() {
         instance = this
         QuickStepContract.sRecentsDisabled = !recentsEnabled
         Flowerpot.Manager.getInstance(this)
-    }
-
-    fun hideClockInStatusBar() {
-        if (!isRecentsEnabled) return
-        try {
-            val currentBlacklist = Settings.Secure.getString(contentResolver, "icon_blacklist") ?: ""
-            val newBlacklist = if (currentBlacklist.contains("clock")) {
-                currentBlacklist
-            } else {
-                "$currentBlacklist,clock"
-            }
-            Settings.Secure.putString(contentResolver, "icon_blacklist", newBlacklist)
-        } catch (_: Exception) {
-            // ignore
-        }
-    }
-
-    fun restoreClockInStatusBar() {
-        if (!isRecentsEnabled) return
-        try {
-            val currentBlacklist = Settings.Secure.getString(contentResolver, "icon_blacklist") ?: ""
-            val newBlacklist = currentBlacklist.split(",").filter { it != "clock" }.joinToString(",")
-            Settings.Secure.putString(contentResolver, "icon_blacklist", newBlacklist)
-        } catch (_: Exception) {
-        }
     }
 
     fun onLauncherAppStateCreated() {
@@ -209,17 +168,6 @@ class LawnchairApp : Application() {
         return true
     }
 
-    fun isAccessibilityServiceBound(): Boolean = accessibilityService != null
-
-    fun performGlobalAction(action: Int): Boolean {
-        return accessibilityService?.performGlobalAction(action) ?: run {
-            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .let(::startActivity)
-            false
-        }
-    }
-
     companion object {
         private const val TAG = "LawnchairApp"
 
@@ -232,40 +180,6 @@ class LawnchairApp : Application() {
 
         @JvmStatic
         val isAtleastT: Boolean get() = instance.isAtleastT
-
-        fun Launcher.showQuickstepWarningIfNecessary() {
-            val launcher = this
-            if (!lawnchairApp.isRecentsComponent || isRecentsEnabled) return
-            ComposeBottomSheet.show(this) {
-                ModalBottomSheetContent(
-                    title = { Text(text = stringResource(id = R.string.quickstep_incompatible)) },
-                    text = {
-                        val description = stringResource(
-                            id = R.string.quickstep_incompatible_description,
-                            stringResource(id = R.string.derived_app_name),
-                            Build.VERSION.RELEASE,
-                        )
-                        Text(text = description)
-                    },
-                    buttons = {
-                        OutlinedButton(
-                            onClick = {
-                                openAppInfo(launcher)
-                                close(true)
-                            },
-                        ) {
-                            Text(text = stringResource(id = R.string.app_info_drop_target_label))
-                        }
-                        Spacer(modifier = Modifier.requiredWidth(8.dp))
-                        Button(
-                            onClick = { close(true) },
-                        ) {
-                            Text(text = stringResource(id = android.R.string.ok))
-                        }
-                    },
-                )
-            }
-        }
 
         fun getUriForFile(context: Context, file: File): Uri {
             return FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.fileprovider", file)

@@ -81,8 +81,6 @@ class DeviceProfileOverrides(context: Context) : SafeCloseable {
 
         val iconSizeFactor: Float,
         val allAppsIconSizeFactor: Float,
-
-        val enableTaskbarOnPhone: Boolean,
     ) {
         constructor(
             prefs: PreferenceManager,
@@ -95,8 +93,6 @@ class DeviceProfileOverrides(context: Context) : SafeCloseable {
 
             iconSizeFactor = prefs2.homeIconSizeFactor.firstBlocking(),
             allAppsIconSizeFactor = prefs2.drawerIconSizeFactor.firstBlocking(),
-
-            enableTaskbarOnPhone = prefs2.enableTaskbarOnPhone.firstBlocking(),
         )
 
         fun applyUi(idp: InvariantDeviceProfile) {

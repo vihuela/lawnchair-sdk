@@ -143,7 +143,6 @@ import com.android.launcher3.uioverrides.touchcontrollers.NoButtonNavbarToOvervi
 import com.android.launcher3.uioverrides.touchcontrollers.NoButtonQuickSwitchTouchController;
 import com.android.launcher3.uioverrides.touchcontrollers.PortraitStatesTouchController;
 import com.android.launcher3.uioverrides.touchcontrollers.QuickSwitchTouchController;
-import com.android.launcher3.uioverrides.touchcontrollers.StatusBarTouchController;
 import com.android.launcher3.uioverrides.touchcontrollers.TaskViewTouchController;
 import com.android.launcher3.uioverrides.touchcontrollers.TransposedQuickSwitchTouchController;
 import com.android.launcher3.uioverrides.touchcontrollers.TwoButtonNavbarTouchController;
@@ -634,10 +633,6 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer 
             default:
                 list.add(new PortraitStatesTouchController(this));
                 break;
-        }
-
-        if (!getDeviceProfile().isMultiWindowMode) {
-            list.add(new StatusBarTouchController(this));
         }
 
         list.add(new LauncherTaskViewController(this));

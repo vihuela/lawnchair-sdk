@@ -321,46 +321,6 @@ class DevOptionsUiHelper(c: Context, attr: AttributeSet?) : PreferenceGroup(c, a
     }
 
     private fun addIntentTargets() {
-        val launchSandboxIntent =
-            Intent("com.android.quickstep.action.GESTURE_SANDBOX")
-                .setPackage(context.packageName)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        newCategory("Gesture Navigation Sandbox").apply {
-            addPreference(
-                Preference(context).apply {
-                    title = "Launch Gesture Tutorial Steps menu"
-                    intent = Intent(launchSandboxIntent).putExtra("use_tutorial_menu", true)
-                }
-            )
-            addPreference(
-                Preference(context).apply {
-                    title = "Launch Back Tutorial"
-                    intent =
-                        Intent(launchSandboxIntent)
-                            .putExtra("use_tutorial_menu", false)
-                            .putExtra("tutorial_steps", arrayOf("BACK_NAVIGATION"))
-                }
-            )
-            addPreference(
-                Preference(context).apply {
-                    title = "Launch Home Tutorial"
-                    intent =
-                        Intent(launchSandboxIntent)
-                            .putExtra("use_tutorial_menu", false)
-                            .putExtra("tutorial_steps", arrayOf("HOME_NAVIGATION"))
-                }
-            )
-            addPreference(
-                Preference(context).apply {
-                    title = "Launch Overview Tutorial"
-                    intent =
-                        Intent(launchSandboxIntent)
-                            .putExtra("use_tutorial_menu", false)
-                            .putExtra("tutorial_steps", arrayOf("OVERVIEW_NAVIGATION"))
-                }
-            )
-        }
-
         newCategory("Other activity targets").apply {
             addPreference(
                 Preference(context).apply {

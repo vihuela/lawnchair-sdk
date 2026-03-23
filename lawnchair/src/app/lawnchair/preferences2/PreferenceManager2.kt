@@ -275,12 +275,6 @@ class PreferenceManager2 private constructor(private val context: Context) :
         defaultValue = context.resources.getBoolean(R.bool.config_default_show_status_bar),
     )
 
-    val statusBarClock = preference(
-        key = booleanPreferencesKey(name = "status_bar_clock"),
-        defaultValue = context.resources.getBoolean(R.bool.config_default_dynamic_hide_status_bar_clock),
-        onSet = { reloadHelper.reloadGrid() },
-    )
-
     val rememberPosition = preference(
         key = booleanPreferencesKey(name = "all_apps_remember_position"),
         defaultValue = context.resources.getBoolean(R.bool.config_default_remember_position),
@@ -610,16 +604,6 @@ class PreferenceManager2 private constructor(private val context: Context) :
         defaultValue = "",
     )
 
-    val enableTaskbarOnPhone = preference(
-        key = booleanPreferencesKey("enable_taskbar_on_phone"),
-        defaultValue = false,
-        onSet = {
-            reloadHelper.reloadGrid()
-            reloadHelper.reloadTaskbar()
-            reloadHelper.recreate()
-        },
-    )
-
     val smartspaceMode = preference(
         key = stringPreferencesKey("smartspace_mode"),
         defaultValue = SmartspaceMode.fromString(context.getString(R.string.config_default_smartspace_mode)),
@@ -703,7 +687,7 @@ class PreferenceManager2 private constructor(private val context: Context) :
 
     val doubleTapGestureHandler = serializablePreference<GestureHandlerConfig>(
         key = stringPreferencesKey("double_tap_gesture_handler"),
-        defaultValue = GestureHandlerConfig.Sleep,
+        defaultValue = GestureHandlerConfig.NoOp,
     )
 
     val swipeUpGestureHandler = serializablePreference<GestureHandlerConfig>(
@@ -713,7 +697,7 @@ class PreferenceManager2 private constructor(private val context: Context) :
 
     val swipeDownGestureHandler = serializablePreference<GestureHandlerConfig>(
         key = stringPreferencesKey("swipe_down_gesture_handler"),
-        defaultValue = GestureHandlerConfig.OpenNotifications,
+        defaultValue = GestureHandlerConfig.NoOp,
     )
 
     val homePressGestureHandler = serializablePreference<GestureHandlerConfig>(

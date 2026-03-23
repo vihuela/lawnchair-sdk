@@ -6,7 +6,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.not
@@ -24,11 +23,7 @@ import app.lawnchair.ui.preferences.components.controls.SwitchPreference
 import app.lawnchair.ui.preferences.components.layout.ExpandAndShrink
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
 import app.lawnchair.ui.preferences.navigation.SearchProviderPreference
-import app.lawnchair.util.FileAccessManager
 import com.android.launcher3.R
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
 
 @Composable
 fun DrawerSearchPreference(
@@ -105,10 +100,6 @@ private fun ASISearchSettings(prefs: PreferenceManager) {
         label = stringResource(id = R.string.search_pref_result_shortcuts_title),
     )
     SwitchPreference(
-        adapter = prefs.searchResultPeople.getAdapter(),
-        label = stringResource(id = R.string.search_pref_result_people_title),
-    )
-    SwitchPreference(
         adapter = prefs.searchResultPixelTips.getAdapter(),
         label = stringResource(id = R.string.search_pref_result_tips_title),
     )
@@ -145,7 +136,6 @@ private fun SearchProvider(
     )
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun LocalSearchSettings(
     prefs: PreferenceManager,
@@ -170,24 +160,6 @@ private fun LocalSearchSettings(
         onClick = {
             navController.navigate(SearchProviderPreference(SearchProviderId.WEB))
         },
-    )
-    SearchProviderPreferenceItem(
-        adapter = prefs.searchResultPeople.getAdapter(),
-        label = stringResource(id = R.string.search_pref_result_people_title),
-        description = stringResource(id = R.string.search_pref_result_contacts_description),
-        onClick = {
-            navController.navigate(SearchProviderPreference(SearchProviderId.CONTACTS))
-        },
-        enabled = rememberPermissionState(android.Manifest.permission.READ_CONTACTS).status.isGranted,
-    )
-    SearchProviderPreferenceItem(
-        adapter = prefs.searchResultFilesToggle.getAdapter(),
-        label = stringResource(R.string.search_pref_result_files_title),
-        description = stringResource(R.string.search_pref_result_files_description),
-        onClick = {
-            navController.navigate(SearchProviderPreference(SearchProviderId.FILES))
-        },
-        enabled = remember { FileAccessManager.getInstance(context) }.hasAnyPermission.collectAsStateWithLifecycle().value,
     )
     SearchProviderPreferenceItem(
         adapter = prefs.searchResultSettingsEntry.getAdapter(),

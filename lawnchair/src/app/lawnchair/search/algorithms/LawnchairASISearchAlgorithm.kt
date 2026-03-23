@@ -32,7 +32,6 @@ class LawnchairASISearchAlgorithm(context: Context) :
         prefs = PreferenceManager.getInstance(context).also {
             createSearchSession()
             it.searchResultShortcuts.addListener(this)
-            it.searchResultPeople.addListener(this)
             it.searchResultPixelTips.addListener(this)
             it.searchResultSettings.addListener(this)
         }
@@ -61,7 +60,6 @@ class LawnchairASISearchAlgorithm(context: Context) :
         }
         prefs.let {
             it.searchResultShortcuts.removeListener(this)
-            it.searchResultPeople.removeListener(this)
             it.searchResultPixelTips.removeListener(this)
             it.searchResultSettings.removeListener(this)
         }
@@ -81,9 +79,6 @@ class LawnchairASISearchAlgorithm(context: Context) :
             var resultTypes = 1 or 2
             if (prefs.searchResultShortcuts.get()) {
                 resultTypes = resultTypes or 1546
-            }
-            if (prefs.searchResultPeople.get()) {
-                resultTypes = resultTypes or 4
             }
             if (prefs.searchResultPixelTips.get()) {
                 resultTypes = resultTypes or 8192

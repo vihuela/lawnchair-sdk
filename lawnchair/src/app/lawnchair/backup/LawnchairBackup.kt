@@ -123,7 +123,6 @@ class LawnchairBackup(
 
         val contentOptions = listOf(
             INCLUDE_LAYOUT_AND_SETTINGS to R.string.backup_content_layout_and_settings,
-            INCLUDE_WALLPAPER to R.string.backup_content_wallpaper,
         )
 
         fun generateBackupFileName(): String {
@@ -142,6 +141,7 @@ class LawnchairBackup(
 
         @SuppressLint("MissingPermission")
         suspend fun create(context: Context, contents: Int, screenshotBitmap: Bitmap, fileUri: Uri) {
+            val sanitizedContents = contents and INCLUDE_LAYOUT_AND_SETTINGS
             val idp = LauncherAppState.getIDP(context)
             val createdAt = Timestamp.newBuilder()
                 .setSeconds(System.currentTimeMillis() / 1000)
@@ -151,7 +151,7 @@ class LawnchairBackup(
                 .setLawnchairVersion(BuildConfig.VERSION_CODE)
                 .setBackupVersion(BACKUP_VERSION)
                 .setCreatedAt(createdAt)
-                .setContents(contents)
+                .setContents(sanitizedContents)
                 .setGridState(DeviceGridState(idp).toProtoMessage())
                 .setPreviewWidth(screenshotBitmap.width)
                 .setPreviewHeight(screenshotBitmap.height)
@@ -165,15 +165,7 @@ class LawnchairBackup(
                         out.putNextEntry(ZipEntry(INFO_FILE_NAME))
                         info.writeTo(out)
 
-                        if (contents.hasFlag(INCLUDE_WALLPAPER)) {
-                            val wallpaperManager = WallpaperManager.getInstance(context)
-                            val wallpaperBitmap = wallpaperManager.drawable?.toBitmap()
-                            if (wallpaperBitmap != null) {
-                                out.putNextEntry(ZipEntry(WALLPAPER_FILE_NAME))
-                                wallpaperBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                            }
-                        }
-                        if (contents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
+                        if (sanitizedContents.hasFlag(INCLUDE_LAYOUT_AND_SETTINGS)) {
                             out.putNextEntry(ZipEntry(SCREENSHOT_FILE_NAME))
                             screenshotBitmap.compress(Bitmap.CompressFormat.PNG, 85, out)
                         }

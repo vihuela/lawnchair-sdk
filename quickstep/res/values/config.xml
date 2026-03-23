@@ -17,9 +17,7 @@
     <string name="overscroll_plugin_factory_class" translatable="false" />
     <string name="task_overlay_factory_class" translatable="false"/>
 
-    <string-array name="back_gesture_blocking_activities" translatable="false">
-        <item>com.android.launcher3/com.android.quickstep.interaction.GestureSandboxActivity</item>
-    </string-array>
+    <string-array name="back_gesture_blocking_activities" translatable="false" />
 
     <string name="stats_log_manager_class" translatable="false">com.android.quickstep.logging.StatsLogCompatManager</string>
     <string name="test_information_handler_class" translatable="false">com.android.quickstep.QuickstepTestInformationHandler</string>
