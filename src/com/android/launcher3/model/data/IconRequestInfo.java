@@ -15,8 +15,6 @@
  */
 package com.android.launcher3.model.data;
 
-import static android.graphics.BitmapFactory.decodeByteArray;
-
 import android.content.Context;
 import android.content.pm.LauncherActivityInfo;
 import android.util.Log;
@@ -24,7 +22,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.launcher3.icons.LauncherIcons;
+import com.android.launcher3.LauncherAppState;
+import com.android.launcher3.icons.BitmapInfo;
 
 /**
  * Class representing one request for an icon to be queried in a sql database.
@@ -73,14 +72,23 @@ public class IconRequestInfo<T extends ItemInfoWithIcon> {
                     "loadWorkspaceIcon should only be use for a WorkspaceItemInfos: " + itemInfo);
         }
 
-        try (LauncherIcons li = LauncherIcons.obtain(context)) {
-            WorkspaceItemInfo info = (WorkspaceItemInfo) itemInfo;
-            // Failed to load from resource, try loading from DB.
-            if (iconBlob == null) {
+        WorkspaceItemInfo info = (WorkspaceItemInfo) itemInfo;
+        // Failed to load from resource, try loading from DB.
+        if (iconBlob == null) {
+            return false;
+        }
+
+        try {
+            BitmapInfo bitmapInfo = BitmapInfo.fromByteArray(
+                    iconBlob,
+                    /* color= */ 0,
+                    info.user,
+                    LauncherAppState.getInstance(context).getIconCache(),
+                    context);
+            if (bitmapInfo == null || bitmapInfo.isNullOrLowRes()) {
                 return false;
             }
-            info.bitmap = li.createIconBitmap(decodeByteArray(
-                    iconBlob, 0, iconBlob.length));
+            info.bitmap = bitmapInfo;
             return true;
         } catch (Exception e) {
             Log.e(TAG, "Failed to decode byte array for info " + itemInfo, e);

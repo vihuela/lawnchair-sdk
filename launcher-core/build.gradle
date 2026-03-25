@@ -1,0 +1,265 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.ksp)
+    alias(libs.plugins.google.protobuf)
+    alias(libs.plugins.rikka.refine)
+}
+
+def launcherMinSdk = 26
+def launcherTargetSdk = 35
+def launcherApplicationId = "app.lawnchair"
+def launcherVersionCode = 1
+def launcherVersionName = "1"
+def launcherCommitHash = providers.exec {
+    workingDir projectDir
+    commandLine('git', 'rev-parse', '--short=7', 'HEAD')
+}.standardOutput.asText.get().trim()
+
+android {
+    namespace "com.android.launcher3"
+
+    defaultConfig {
+        minSdk launcherMinSdk
+        targetSdk launcherTargetSdk
+        buildConfigField "String", "APPLICATION_ID", "\"${launcherApplicationId}\""
+        buildConfigField "int", "VERSION_CODE", "${launcherVersionCode}"
+        buildConfigField "String", "VERSION_NAME", "\"${launcherVersionName}\""
+        buildConfigField "String", "COMMIT_HASH", "\"${launcherCommitHash}\""
+        buildConfigField "int", "QUICKSTEP_MIN_SDK", "${launcherMinSdk}"
+        buildConfigField "int", "QUICKSTEP_MAX_SDK", "${launcherTargetSdk}"
+        resValue "string", "launcher_component", "app.lawnchair/app.lawnchair.LawnchairLauncher"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        aidl true
+        buildConfig true
+        resValues true
+    }
+
+    packagingOptions.resources.excludes += [
+        "**/*.proto",
+        "**/*.bin",
+        "**/*.java",
+        "**/*.properties",
+        "**/*.version",
+        "**/*.*_module",
+        "com/**",
+        "google/**",
+        "kotlin/**",
+        "kotlinx/**",
+        "okhttp3/**",
+        "META-INF/services/**",
+        "META-INF/com/**",
+        "META-INF/licenses/**",
+        "META-INF/AL2.0",
+        "META-INF/LGPL2.1",
+    ]
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+    }
+
+    flavorDimensions += ["app", "recents", "channel"]
+
+    productFlavors {
+        lawn {
+            dimension "app"
+        }
+
+        withQuickstep {
+            dimension "recents"
+        }
+
+        github {
+            dimension "channel"
+        }
+    }
+
+    sourceSets {
+        main {
+            res.srcDirs = ['../res']
+            java.srcDirs = ['../src', '../src_plugins']
+            manifest.srcFile '../AndroidManifest-common.xml'
+            proto {
+                srcDirs = ['../protos', '../quickstep/protos_overrides']
+            }
+        }
+
+        lawn {
+            java.srcDirs = ['../src_flags', '../src_shortcuts_overrides', '../lawnchair/src', '../tests/shared']
+            aidl.srcDirs = ['../lawnchair/aidl']
+            res.srcDirs = ['../lawnchair/res', '../platform_frameworks_libs_systemui/animationlib/res']
+            manifest.srcFile "../lawnchair/AndroidManifest.xml"
+            assets.srcDirs = ['../lawnchair/assets']
+            proto {
+                srcDirs = ['../lawnchair/protos']
+            }
+        }
+
+        github {
+            manifest.srcFile "../github/AndroidManifest.xml"
+        }
+
+        lawnWithQuickstepGithub {
+            manifest.srcFile "../quickstep/AndroidManifest-launcher.xml"
+        }
+
+        withQuickstep {
+            res.srcDirs = ['../quickstep/res', '../quickstep/recents_ui_overrides/res']
+            java.srcDirs = ['../quickstep/src', '../quickstep/recents_ui_overrides/src']
+            manifest.srcFile "../quickstep/AndroidManifest.xml"
+        }
+    }
+}
+
+composeCompiler {
+    stabilityConfigurationFiles.addAll(
+        rootProject.layout.projectDirectory.file("compose_compiler_config.conf"),
+    )
+    reportsDestination = layout.buildDirectory.dir("compose_build_reports")
+}
+
+tasks.withType(KotlinCompile).configureEach {
+    compilerOptions {
+        jvmDefault = JvmDefaultMode.ENABLE
+        jvmTarget = JvmTarget.fromTarget(libs.versions.jdkRelease.get())
+    }
+}
+
+addFrameworkJar('framework-15.jar')
+
+dependencies {
+    api projects.launcherSdkApi
+
+    implementation projects.iconloaderlib
+    implementation projects.searchuilib
+    implementation projects.animationlib
+    implementation projects.shared
+    implementation projects.anim
+    implementation projects.unfold
+    implementation projects.viewcapture
+    implementation projects.log
+    implementation projects.plugincore
+    implementation projects.compatLib
+    implementation projects.compatLib.compatLibVQ
+    implementation projects.compatLib.compatLibVR
+    implementation projects.compatLib.compatLibVS
+    implementation projects.compatLib.compatLibVT
+    implementation projects.compatLib.compatLibVU
+    implementation projects.compatLib.compatLibVV
+    implementation projects.wmshell
+    implementation projects.flags
+
+    compileOnly projects.hiddenApi
+    compileOnly projects.plugin
+    compileOnly projects.common
+
+    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: 'SystemUI-statsd-15.jar')
+    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: 'WindowManager-Shell-15.jar')
+    compileOnly fileTree(dir: "$rootDir/prebuilts/libs", include: 'framework-15.jar')
+
+    coreLibraryDesugaring libs.android.desugarJdkLibs
+
+    implementation libs.androidx.profileinstaller
+    implementation libs.androidx.recyclerview
+    implementation libs.androidx.preference.ktx
+    implementation libs.kotlinx.coroutines.android
+    implementation libs.kotlinx.serialization.json
+    implementation libs.chickenhook.restrictionbypass
+    implementation libs.rikka.refine.runtime
+
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+    implementation libs.compose.ui.util
+    implementation libs.compose.ui.tooling.preview
+    implementation libs.compose.ui.google.fonts
+    implementation libs.compose.foundation
+    implementation libs.compose.material.icons
+    implementation libs.compose.runtime.livedata
+    implementation libs.compose.material3
+    implementation libs.compose.material3.windowSizeClass
+    implementation libs.androidx.activity.compose
+    implementation libs.androidx.lifecycle.viewmodel.compose
+    implementation libs.androidx.navigation.compose
+    implementation libs.androidx.constraintlayout
+    implementation libs.androidx.palette.ktx
+    implementation libs.androidx.slice.core
+    implementation libs.bundles.accompanist
+    implementation libs.google.material
+    implementation libs.material.motion.compose
+    implementation libs.kdrag0n.colorkt
+    implementation libs.coil.compose
+    implementation libs.xdrop.fuzzywuzzy
+    implementation libs.bundles.opto
+    implementation libs.androidx.datastore.preferences
+    implementation libs.bundles.retrofit
+    implementation libs.bundles.room
+    ksp libs.room.compiler
+    implementation libs.persian.date
+    implementation libs.airbnb.lottie
+    implementation libs.reorderable
+    implementation(libs.smartspacer.sdk) {
+        exclude group: "com.github.skydoves", module: "balloon"
+    }
+    implementation libs.hoko.blur
+    implementation libs.androidx.window
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantName = variant.name
+        def variantNameCap = variantName.capitalize()
+        def typedefFile = layout.buildDirectory.file(
+            "intermediates/annotations_typedef_file/${variantName}/extract${variantNameCap}Annotations/typedefs.txt",
+        )
+        def stubTask = tasks.register("prepare${variantNameCap}TypedefRecipe") {
+            outputs.file(typedefFile)
+            doLast {
+                def outputFile = typedefFile.get().asFile
+                outputFile.parentFile.mkdirs()
+                outputFile.text = ""
+            }
+        }
+        tasks.matching { it.name == "sync${variantNameCap}LibJars" }.configureEach {
+            dependsOn(stubTask)
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("extract") && it.name.endsWith("Annotations") }.configureEach {
+    enabled = false
+}
+
+tasks.matching { it.name.startsWith("sync") && it.name.endsWith("LibJars") }.configureEach {
+    doFirst {
+        def typedefRecipe = hasProperty("typedefRecipe") ? property("typedefRecipe") : null
+        if (typedefRecipe instanceof File && !typedefRecipe.exists()) {
+            typedefRecipe.parentFile.mkdirs()
+            typedefRecipe.text = ""
+        }
+    }
+}
+
+[
+    "lawnWithQuickstepGithubDebug",
+].each { variantName ->
+    def variantNameCap = variantName.capitalize()
+    def typedefRecipe = file("$buildDir/intermediates/annotations_typedef_file/${variantName}/extract${variantNameCap}Annotations/typedefs.txt")
+    typedefRecipe.parentFile.mkdirs()
+    if (!typedefRecipe.exists()) {
+        typedefRecipe.text = ""
+    }
+}

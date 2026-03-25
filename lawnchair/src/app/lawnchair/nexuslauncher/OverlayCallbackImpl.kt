@@ -7,6 +7,7 @@ import android.os.Bundle
 import app.lawnchair.FeedBridge
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.sdk.LawnchairSdkRegistry
 import com.android.launcher3.Launcher
 import com.android.launcher3.Utilities
 import com.android.systemui.plugins.shared.LauncherOverlayManager
@@ -37,7 +38,8 @@ class OverlayCallbackImpl(private val mLauncher: LawnchairLauncher) :
     private var mFlags = 0
 
     init {
-        val enableFeed = PreferenceManager2.getInstance(mLauncher).enableFeed.firstBlocking()
+        val enableFeed = PreferenceManager2.getInstance(mLauncher).enableFeed.firstBlocking() &&
+            LawnchairSdkRegistry.hasMinusOneContentProvider
         mClient = LauncherClient(
             mLauncher,
             this,

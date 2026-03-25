@@ -143,6 +143,11 @@ allprojects {
 }
 
 android {
+    compileSdk {
+        version = release(appCompileSdk) {
+            minorApiLevel = appCompileSdkMinor
+        }
+    }
     namespace "com.android.launcher3"
     defaultConfig {
         versionCode appVersionCode
@@ -306,6 +311,7 @@ composeCompiler {
 addFrameworkJar('framework-15.jar')
 
 dependencies {
+    implementation projects.launcherSdkApi
     implementation projects.iconloaderlib
     implementation projects.searchuilib
     implementation projects.animationlib

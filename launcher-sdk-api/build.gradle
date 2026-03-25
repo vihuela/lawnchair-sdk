@@ -1,0 +1,63 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+android {
+    namespace "app.lawnchair.sdk.api"
+
+    defaultConfig {
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+}
+
+dependencies {
+    api platform(libs.compose.bom)
+    api libs.compose.ui
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantName = variant.name
+        def variantNameCap = variantName.capitalize()
+        def typedefFile = layout.buildDirectory.file(
+            "intermediates/annotations_typedef_file/${variantName}/extract${variantNameCap}Annotations/typedefs.txt",
+        )
+        def stubTask = tasks.register("prepare${variantNameCap}TypedefRecipe") {
+            outputs.file(typedefFile)
+            doLast {
+                def outputFile = typedefFile.get().asFile
+                outputFile.parentFile.mkdirs()
+                outputFile.text = ""
+            }
+        }
+        tasks.matching { it.name == "sync${variantNameCap}LibJars" }.configureEach {
+            dependsOn(stubTask)
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("extract") && it.name.endsWith("Annotations") }.configureEach {
+    enabled = false
+}
+
+tasks.matching { it.name.startsWith("sync") && it.name.endsWith("LibJars") }.configureEach {
+    doFirst {
+        def typedefRecipe = hasProperty("typedefRecipe") ? property("typedefRecipe") : null
+        if (typedefRecipe instanceof File && !typedefRecipe.exists()) {
+            typedefRecipe.parentFile.mkdirs()
+            typedefRecipe.text = ""
+        }
+    }
+}
+
+def debugTypedefRecipe = file("$buildDir/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt")
+debugTypedefRecipe.parentFile.mkdirs()
+if (!debugTypedefRecipe.exists()) {
+    debugTypedefRecipe.text = ""
+}

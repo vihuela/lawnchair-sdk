@@ -3,7 +3,7 @@ package app.lawnchair.ui.preferences.about
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.android.launcher3.BuildConfig
+import app.lawnchair.util.LawnchairHostInfo
 import com.android.launcher3.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +47,7 @@ class AboutViewModel(
             _uiState.update { it.copy(coreTeam = updatedCoreTeam) }
         }
 
-        if (BuildConfig.APPLICATION_ID.contains("nightly")) {
+        if (LawnchairHostInfo.isNightly(application)) {
             nightlyBuildsRepository.checkForUpdate()
             viewModelScope.launch {
                 nightlyBuildsRepository.updateState.collect { state ->

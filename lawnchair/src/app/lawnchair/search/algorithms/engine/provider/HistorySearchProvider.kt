@@ -25,7 +25,7 @@ object HistorySearchProvider {
         return withContext(Dispatchers.IO) {
             try {
                 val contentResolver: ContentResolver = context.contentResolver
-                val uri: Uri = "content://${LawnchairRecentSuggestionProvider.AUTHORITY}/suggestions".toUri()
+                val uri: Uri = "content://${LawnchairRecentSuggestionProvider.authority(context)}/suggestions".toUri()
 
                 val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
                 val recentKeywords = mutableListOf<RecentKeyword>()

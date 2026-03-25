@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Trace
 import android.util.Log
 import androidx.annotation.UiThread
+import app.lawnchair.util.LawnchairHostInfo
 import com.android.launcher3.Flags.enableSmartspaceRemovalToggle
 import com.android.launcher3.LauncherConstants.TraceEvents
 import com.android.launcher3.Utilities.SHOULD_SHOW_FIRST_PAGE_WIDGET
@@ -302,7 +303,7 @@ class ModelCallbacks(private var launcher: Launcher) : BgDataModel.Callbacks {
 
         val widgetsListBaseEntry: WidgetsListBaseEntry =
             launcher.popupDataProvider.allWidgets.firstOrNull { item: WidgetsListBaseEntry ->
-                item.mPkgItem.packageName == BuildConfig.APPLICATION_ID
+                item.mPkgItem.packageName == LawnchairHostInfo.applicationId()
             } ?: return
 
         val info =

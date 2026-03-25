@@ -233,6 +233,7 @@ public class BgDataModel {
                     updatedDeepShortcuts.add(item.user);
                     // Fall through.
                 }
+                case LauncherSettings.Favorites.ITEM_TYPE_SEARCH_ACTION:
                 case LauncherSettings.Favorites.ITEM_TYPE_APPLICATION:
                     workspaceItems.remove(item);
                     break;
@@ -273,6 +274,7 @@ public class BgDataModel {
                 // array (above) but also verify the existence of their container, like regular
                 // apps (below).
             case LauncherSettings.Favorites.ITEM_TYPE_DEEP_SHORTCUT:
+            case LauncherSettings.Favorites.ITEM_TYPE_SEARCH_ACTION:
             case LauncherSettings.Favorites.ITEM_TYPE_APPLICATION:
                 if (item.container == LauncherSettings.Favorites.CONTAINER_DESKTOP ||
                         item.container == LauncherSettings.Favorites.CONTAINER_HOTSEAT) {

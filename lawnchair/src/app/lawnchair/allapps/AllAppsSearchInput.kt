@@ -98,7 +98,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
     }
     private var bgVisible = true
     private var bgAlpha = 1f
-    private val suggestionsRecent = SearchRecentSuggestions(launcher, LawnchairRecentSuggestionProvider.AUTHORITY, LawnchairRecentSuggestionProvider.MODE)
+    private val suggestionsRecent = SearchRecentSuggestions(launcher, LawnchairRecentSuggestionProvider.authority(launcher), LawnchairRecentSuggestionProvider.MODE)
     private val prefs = PreferenceManager.getInstance(launcher)
     private val prefs2 = PreferenceManager2.getInstance(launcher)
 

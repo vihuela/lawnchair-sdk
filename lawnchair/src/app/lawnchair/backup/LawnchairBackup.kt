@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.core.graphics.drawable.toBitmap
 import app.lawnchair.LawnchairProto.BackupInfo
+import app.lawnchair.util.LawnchairHostInfo
 import app.lawnchair.util.hasFlag
 import app.lawnchair.util.scaleDownTo
 import app.lawnchair.util.scaleDownToDisplaySize
@@ -148,7 +149,7 @@ class LawnchairBackup(
             val colorHints = WallpaperManagerCompat.INSTANCE.get(context).wallpaperColors?.colorHints ?: 0
             val wallpaperSupportsDarkText = (colorHints and WallpaperColorsCompat.HINT_SUPPORTS_DARK_TEXT) != 0
             val info = BackupInfo.newBuilder()
-                .setLawnchairVersion(BuildConfig.VERSION_CODE)
+                .setLawnchairVersion(LawnchairHostInfo.versionCode(context))
                 .setBackupVersion(BACKUP_VERSION)
                 .setCreatedAt(createdAt)
                 .setContents(sanitizedContents)

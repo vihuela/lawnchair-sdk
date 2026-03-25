@@ -29,6 +29,8 @@ import androidx.core.content.FileProvider
 import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
 import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.sdk.LawnchairSdkApiInitializer
+import app.lawnchair.sdk.LawnchairSdkLoader
 import app.lawnchair.util.restartLauncher
 import app.lawnchair.util.unsafeLazy
 import com.android.launcher3.BuildConfig
@@ -38,7 +40,7 @@ import com.android.quickstep.RecentsActivity
 import com.android.systemui.shared.system.QuickStepContract
 import java.io.File
 
-class LawnchairApp : Application() {
+open class LawnchairApp : Application() {
     private val compatible = Build.VERSION.SDK_INT in BuildConfig.QUICKSTEP_MIN_SDK..BuildConfig.QUICKSTEP_MAX_SDK
     private val isRecentsComponent: Boolean by unsafeLazy { checkRecentsComponent() }
     private val recentsEnabled: Boolean get() = compatible && isRecentsComponent
@@ -48,6 +50,8 @@ class LawnchairApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        LawnchairSdkApiInitializer.install()
+        LawnchairSdkLoader.load(this)
         QuickStepContract.sRecentsDisabled = !recentsEnabled
         Flowerpot.Manager.getInstance(this)
     }
@@ -182,7 +186,7 @@ class LawnchairApp : Application() {
         val isAtleastT: Boolean get() = instance.isAtleastT
 
         fun getUriForFile(context: Context, file: File): Uri {
-            return FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
+            return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         }
     }
 }

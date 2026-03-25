@@ -217,7 +217,9 @@ public class LoaderCursor extends CursorWrapper {
 
     public IconRequestInfo<WorkspaceItemInfo> createIconRequestInfo(
             WorkspaceItemInfo wai, boolean useLowResIcon) {
-        byte[] iconBlob = itemType == Favorites.ITEM_TYPE_DEEP_SHORTCUT || restoreFlag != 0
+        byte[] iconBlob = itemType == Favorites.ITEM_TYPE_DEEP_SHORTCUT
+                || itemType == Favorites.ITEM_TYPE_SEARCH_ACTION
+                || restoreFlag != 0
                 ? getIconBlob()
                 : null;
 

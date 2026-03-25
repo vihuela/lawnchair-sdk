@@ -11,6 +11,7 @@ import app.lawnchair.search.adapter.SearchAdapterItem
 import app.lawnchair.search.adapter.SearchTargetCompat
 import app.lawnchair.search.adapter.SearchTargetCompat.Companion.RESULT_TYPE_APPLICATION
 import app.lawnchair.search.adapter.SearchTargetCompat.Companion.RESULT_TYPE_SHORTCUT
+import app.lawnchair.util.LawnchairHostInfo
 import com.android.app.search.LayoutType.CALCULATOR
 import com.android.app.search.LayoutType.EMPTY_DIVIDER
 import com.android.app.search.LayoutType.EMPTY_STATE
@@ -75,7 +76,7 @@ sealed class LawnchairSearchAlgorithm(
     protected fun transformSearchResults(results: List<SearchTargetCompat>): List<SearchAdapterItem> {
         val filtered = results
             .asSequence()
-            .filter { it.packageName != BuildConfig.APPLICATION_ID }
+            .filter { it.packageName != LawnchairHostInfo.applicationId(context) }
             .filter { LawnchairSearchAdapterProvider.viewTypeMap[it.layoutType] != null }
             .removeDuplicateDividers()
             .toList()

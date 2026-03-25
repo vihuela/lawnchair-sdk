@@ -24,13 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.lawnchair.data.iconoverride.IconOverrideRepository
-import app.lawnchair.nexuslauncher.OverlayCallbackImpl
 import app.lawnchair.preferences.getAdapter
 import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
 import app.lawnchair.theme.color.ColorMode
 import app.lawnchair.ui.preferences.LocalIsExpandedScreen
-import app.lawnchair.ui.preferences.components.FeedPreference
 import app.lawnchair.ui.preferences.components.GestureHandlerPreference
 import app.lawnchair.ui.preferences.components.HomeLayoutSettings
 import app.lawnchair.ui.preferences.components.NavigationActionPreference
@@ -106,19 +104,6 @@ fun HomeScreenPreferences(
                     }
                 },
             )
-        }
-        PreferenceGroup(heading = stringResource(id = R.string.minus_one)) {
-            val feedAvailable = OverlayCallbackImpl.minusOneAvailable(LocalContext.current)
-            val enableFeedAdapter = prefs2.enableFeed.getAdapter()
-            SwitchPreference(
-                adapter = enableFeedAdapter,
-                label = stringResource(id = R.string.minus_one_enable),
-                description = if (feedAvailable) null else stringResource(id = R.string.minus_one_unavailable),
-                enabled = feedAvailable,
-            )
-            ExpandAndShrink(visible = feedAvailable && enableFeedAdapter.state.value) {
-                FeedPreference()
-            }
         }
         PreferenceGroup(heading = stringResource(R.string.style)) {
             HomeScreenTextColorPreference()

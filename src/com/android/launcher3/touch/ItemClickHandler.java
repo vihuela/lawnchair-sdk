@@ -39,6 +39,8 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Toast;
 
+import app.lawnchair.sdk.SdkDesktopItemActionDispatcher;
+
 import com.android.launcher3.BubbleTextView;
 import com.android.launcher3.BuildConfig;
 import com.android.launcher3.Flags;
@@ -413,6 +415,9 @@ public class ItemClickHandler {
         }
         if (item instanceof WorkspaceItemInfo) {
             WorkspaceItemInfo si = (WorkspaceItemInfo) item;
+            if (SdkDesktopItemActionDispatcher.dispatchIfNeeded(launcher, intent)) {
+                return;
+            }
             if (si.hasStatusFlag(WorkspaceItemInfo.FLAG_SUPPORTS_WEB_UI)
                     && Intent.ACTION_VIEW.equals(intent.getAction())) {
                 // make a copy of the intent that has the package set to null

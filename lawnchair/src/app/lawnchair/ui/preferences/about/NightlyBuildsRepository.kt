@@ -6,7 +6,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
-import com.android.launcher3.BuildConfig
+import app.lawnchair.util.LawnchairHostInfo
 import com.android.launcher3.Utilities
 import java.io.File
 import java.io.IOException
@@ -32,7 +32,7 @@ class NightlyBuildsRepository(
 
     private var currentBuildNumber: Int = 0
     private var latestBuildNumber: Int = 0
-    private var currentCommitHash: String = BuildConfig.COMMIT_HASH
+    private var currentCommitHash: String = LawnchairHostInfo.commitHash()
 
     fun checkForUpdate() {
         coroutineScope.launch(Dispatchers.Default) {
@@ -42,7 +42,7 @@ class NightlyBuildsRepository(
                 val nightly = releases.firstOrNull { it.tagName == "nightly" }
                 val asset = nightly?.assets?.firstOrNull()
 
-                currentBuildNumber = BuildConfig.VERSION_CODE
+                currentBuildNumber = LawnchairHostInfo.versionCode(applicationContext)
                 latestBuildNumber =
                     asset?.name?.substringAfter("_")?.substringBefore("-")?.toIntOrNull() ?: 0
 
@@ -113,7 +113,7 @@ class NightlyBuildsRepository(
         }
         val uri = FileProvider.getUriForFile(
             applicationContext,
-            "${BuildConfig.APPLICATION_ID}.fileprovider",
+            "${applicationContext.packageName}.fileprovider",
             file,
         )
         val intent = Intent(Intent.ACTION_VIEW).apply {

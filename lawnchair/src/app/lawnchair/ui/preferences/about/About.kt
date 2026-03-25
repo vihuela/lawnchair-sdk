@@ -57,7 +57,7 @@ import app.lawnchair.ui.preferences.components.layout.PreferenceGroupItem
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayoutLazyColumn
 import app.lawnchair.ui.preferences.components.layout.preferenceGroupItems
 import app.lawnchair.ui.preferences.navigation.AboutLicenses
-import com.android.launcher3.BuildConfig
+import app.lawnchair.util.LawnchairHostInfo
 import com.android.launcher3.R
 import kotlinx.coroutines.launch
 
@@ -135,7 +135,7 @@ fun About(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = BuildConfig.VERSION_NAME,
+                    text = LawnchairHostInfo.versionName(context),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -144,7 +144,7 @@ fun About(
                             onClick = {},
                             onLongClick = {
                                 val commitUrl =
-                                    "https://github.com/LawnchairLauncher/lawnchair/commit/${BuildConfig.COMMIT_HASH}"
+                                    "https://github.com/LawnchairLauncher/lawnchair/commit/${LawnchairHostInfo.commitHash()}"
                                 context.startActivity(Intent(Intent.ACTION_VIEW, commitUrl.toUri()))
                             },
                         ),

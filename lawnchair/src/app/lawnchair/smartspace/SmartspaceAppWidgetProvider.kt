@@ -2,11 +2,11 @@ package app.lawnchair.smartspace
 
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
-import com.android.launcher3.BuildConfig
+import app.lawnchair.util.LawnchairHostInfo
 
 class SmartspaceAppWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        @JvmField val componentName = ComponentName(BuildConfig.APPLICATION_ID, SmartspaceAppWidgetProvider::class.java.name)
+        @JvmField val componentName = ComponentName(LawnchairHostInfo.applicationId(), SmartspaceAppWidgetProvider::class.java.name)
     }
 }

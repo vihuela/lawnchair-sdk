@@ -103,7 +103,8 @@ class WorkspaceItemProcessor(
             }
             when (c.itemType) {
                 Favorites.ITEM_TYPE_APPLICATION,
-                Favorites.ITEM_TYPE_DEEP_SHORTCUT -> processAppOrDeepShortcut()
+                Favorites.ITEM_TYPE_DEEP_SHORTCUT,
+                Favorites.ITEM_TYPE_SEARCH_ACTION -> processAppOrDeepShortcut()
                 Favorites.ITEM_TYPE_FOLDER,
                 Favorites.ITEM_TYPE_APP_PAIR -> processFolderOrAppPair()
                 Favorites.ITEM_TYPE_APPWIDGET,
@@ -143,20 +144,21 @@ class WorkspaceItemProcessor(
             c.markDeleted("Null intent from db for item id=${c.id}", RestoreError.MISSING_INFO)
             return
         }
+        val isSearchAction = c.itemType == Favorites.ITEM_TYPE_SEARCH_ACTION
         var disabledState =
             if (userManagerState.isUserQuiet(c.serialNumber))
                 WorkspaceItemInfo.FLAG_DISABLED_QUIET_USER
             else 0
         val cn = intent.component
         val targetPkg = cn?.packageName ?: intent.getPackage()
-        if (targetPkg.isNullOrEmpty()) {
+        if (!isSearchAction && targetPkg.isNullOrEmpty()) {
             c.markDeleted("No target package for item id=${c.id}", RestoreError.MISSING_INFO)
             return
         }
-        var validTarget = launcherApps.isPackageEnabled(targetPkg, c.user)
+        var validTarget = isSearchAction || launcherApps.isPackageEnabled(targetPkg, c.user)
 
         // If it's a deep shortcut, we'll use pinned shortcuts to restore it
-        if (cn != null && validTarget && (c.itemType != Favorites.ITEM_TYPE_DEEP_SHORTCUT)) {
+        if (!isSearchAction && cn != null && validTarget && (c.itemType != Favorites.ITEM_TYPE_DEEP_SHORTCUT)) {
             // If the apk is present and the shortcut points to a specific component.
 
             // If the component is already present
@@ -184,13 +186,13 @@ class WorkspaceItemProcessor(
                 }
             }
         }
-        if (intent.`package` == null) {
+        if (!isSearchAction && intent.`package` == null) {
             intent.`package` = targetPkg
         }
         // else if cn == null => can't infer much, leave it
         // else if !validPkg => could be restored icon or missing sd-card
         when {
-            !TextUtils.isEmpty(targetPkg) && !validTarget -> {
+            !isSearchAction && !TextUtils.isEmpty(targetPkg) && !validTarget -> {
                 // Points to a valid app (superset of cn != null) but the apk
                 // is not available.
                 when {
@@ -219,7 +221,7 @@ class WorkspaceItemProcessor(
                             }
                         }
                     }
-                    pmHelper.isAppOnSdcard(targetPkg, c.user) -> {
+                    pmHelper.isAppOnSdcard(targetPkg!!, c.user) -> {
                         // Package is present but not available.
                         disabledState =
                             disabledState or WorkspaceItemInfo.FLAG_DISABLED_NOT_AVAILABLE
@@ -230,7 +232,7 @@ class WorkspaceItemProcessor(
                         // SdCard is not ready yet. Package might get available,
                         // once it is ready.
                         Log.d(TAG, "Missing package, will check later: $targetPkg")
-                        pendingPackages.add(PackageUserKey(targetPkg, c.user))
+                        pendingPackages.add(PackageUserKey(targetPkg!!, c.user))
                         // Add the icon on the workspace anyway.
                         allowMissingTarget = true
                     }
@@ -262,6 +264,10 @@ class WorkspaceItemProcessor(
             }
             c.itemType == Favorites.ITEM_TYPE_APPLICATION ->
                 info = c.getAppShortcutInfo(intent, allowMissingTarget, useLowResIcon, false)
+            c.itemType == Favorites.ITEM_TYPE_SEARCH_ACTION -> {
+                info = c.loadSimpleWorkspaceItem()
+                info.options = c.options
+            }
             c.itemType == Favorites.ITEM_TYPE_DEEP_SHORTCUT -> {
                 val key = ShortcutKey.fromIntent(intent, c.user)
                 if (unlockedUsers[c.serialNumber]) {
@@ -295,7 +301,7 @@ class WorkspaceItemProcessor(
                 info = c.loadSimpleWorkspaceItem()
 
                 // Shortcuts are only available on the primary profile
-                if (!TextUtils.isEmpty(targetPkg) && pmHelper.isAppSuspended(targetPkg, c.user)) {
+                if (!TextUtils.isEmpty(targetPkg) && pmHelper.isAppSuspended(targetPkg!!, c.user)) {
                     disabledState = disabledState or ItemInfoWithIcon.FLAG_DISABLED_SUSPENDED
                 }
                 info.options = c.options
@@ -315,7 +321,10 @@ class WorkspaceItemProcessor(
             }
         }
         if (info != null) {
-            if (info.itemType != Favorites.ITEM_TYPE_DEEP_SHORTCUT) {
+            if (
+                info.itemType != Favorites.ITEM_TYPE_DEEP_SHORTCUT &&
+                    info.itemType != Favorites.ITEM_TYPE_SEARCH_ACTION
+            ) {
                 // Skip deep shortcuts; their title and icons have already been
                 // loaded above.
                 iconRequestInfos.add(c.createIconRequestInfo(info, useLowResIcon))
@@ -347,7 +356,7 @@ class WorkspaceItemProcessor(
                             activityInfo != null &&
                             activityInfo.applicationInfo.isArchived) && !TextUtils.isEmpty(targetPkg)
                 ) {
-                    tempPackageKey.update(targetPkg, c.user)
+                    tempPackageKey.update(targetPkg!!, c.user)
                     val si = installingPkgs[tempPackageKey]
                     if (si == null) {
                         info.runtimeStatusFlags =

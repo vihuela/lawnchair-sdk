@@ -1,15 +1,20 @@
 package app.lawnchair.search
 
+import android.content.Context
 import android.content.SearchRecentSuggestionsProvider
-import com.android.launcher3.BuildConfig
+import android.content.pm.ProviderInfo
 
 class LawnchairRecentSuggestionProvider : SearchRecentSuggestionsProvider() {
-    companion object {
-        const val AUTHORITY = BuildConfig.APPLICATION_ID + ".search.LawnchairRecentSuggestionProvider"
-        const val MODE = DATABASE_MODE_QUERIES
+    override fun attachInfo(context: Context, info: ProviderInfo) {
+        setupSuggestions(info.authority, MODE)
+        super.attachInfo(context, info)
     }
 
-    init {
-        setupSuggestions(AUTHORITY, MODE)
+    companion object {
+        const val MODE = DATABASE_MODE_QUERIES
+
+        fun authority(context: Context): String {
+            return "${context.packageName}.search.LawnchairRecentSuggestionProvider"
+        }
     }
 }

@@ -1,0 +1,132 @@
+import com.android.build.gradle.api.AndroidBasePlugin
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.test) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.parcelize) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.google.ksp) apply false
+    alias(libs.plugins.google.protobuf) apply false
+    alias(libs.plugins.rikka.refine) apply false
+}
+
+final def appCompileSdk = 36
+final def appCompileSdkMinor = 1
+final def appMinSdk = 26
+final def appTargetSdk = 35
+
+allprojects {
+    plugins.withType(AndroidBasePlugin).configureEach {
+        android {
+            buildToolsVersion "36.1.0"
+            compileSdk {
+                version = release(appCompileSdk) {
+                    minorApiLevel = appCompileSdkMinor
+                }
+            }
+            defaultConfig {
+                minSdk appMinSdk
+                targetSdk appTargetSdk
+                vectorDrawables.useSupportLibrary = true
+            }
+            lint {
+                abortOnError true
+                checkReleaseBuilds false
+            }
+            compileOptions {
+                sourceCompatibility = libs.versions.jdkRelease.get()
+                targetCompatibility = libs.versions.jdkRelease.get()
+            }
+        }
+        dependencies {
+            implementation libs.androidx.core.ktx
+        }
+    }
+
+    plugins.withId("com.google.protobuf") {
+        protobuf {
+            protoc {
+                artifact = libs.protobuf.protoc.get().toString()
+            }
+            generateProtoTasks {
+                all().configureEach { task ->
+                    task.builtins {
+                        remove java
+                        java {
+                            option "lite"
+                        }
+                    }
+                }
+            }
+        }
+        dependencies {
+            implementation libs.protobuf.javalite
+        }
+    }
+
+    plugins.withType(JavaBasePlugin).configureEach {
+        java {
+            sourceCompatibility = libs.versions.jdkRelease.get()
+            targetCompatibility = libs.versions.jdkRelease.get()
+        }
+    }
+
+    tasks.withType(KotlinCompile).configureEach {
+        compilerOptions {
+            jvmDefault = JvmDefaultMode.ENABLE
+            jvmTarget = JvmTarget.fromTarget(libs.versions.jdkRelease.get())
+        }
+    }
+
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.module == libs.kotlin.androidExtensionRuntime.get().module) {
+                useTarget(libs.kotlin.parcelizeRuntime)
+            }
+        }
+    }
+
+    ext {
+        FRAMEWORK_PREBUILTS_DIR = "$rootDir/prebuilts/libs"
+
+        addFrameworkJar = { String name ->
+            def frameworkJar = new File(FRAMEWORK_PREBUILTS_DIR, name)
+            if (!frameworkJar.exists()) {
+                throw new IllegalArgumentException("Framework jar path ${frameworkJar.path} doesn't exist")
+            }
+            gradle.projectsEvaluated {
+                tasks.withType(JavaCompile).configureEach {
+                    classpath = files(frameworkJar, classpath)
+                }
+                tasks.withType(KotlinCompile).configureEach {
+                    libraries.setFrom files(frameworkJar, libraries)
+                }
+            }
+            dependencies {
+                compileOnly files(frameworkJar)
+            }
+        }
+
+        compileOnlyCommonJars = {
+            dependencies {
+                compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "SystemUI-core.jar")
+                compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "SystemUI-statsd.jar")
+                compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "WindowManager-Shell-15.jar")
+
+                compileOnly projects.compatLib
+                compileOnly projects.compatLib.compatLibVQ
+                compileOnly projects.compatLib.compatLibVR
+                compileOnly projects.compatLib.compatLibVS
+                compileOnly projects.compatLib.compatLibVT
+                compileOnly projects.compatLib.compatLibVU
+                compileOnly projects.compatLib.compatLibVV
+            }
+        }
+    }
+}

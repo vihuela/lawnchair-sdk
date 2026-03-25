@@ -185,7 +185,7 @@ fun GenericSearchProviderPreference(
 
                     val suggestionsRecent = SearchRecentSuggestions(
                         context,
-                        LawnchairRecentSuggestionProvider.AUTHORITY,
+                        LawnchairRecentSuggestionProvider.authority(context),
                         LawnchairRecentSuggestionProvider.MODE,
                     )
 

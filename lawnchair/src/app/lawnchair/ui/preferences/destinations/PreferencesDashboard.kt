@@ -47,16 +47,12 @@ import app.lawnchair.preferences.preferenceManager
 import app.lawnchair.preferences2.preferenceManager2
 import app.lawnchair.ui.OverflowMenu
 import app.lawnchair.ui.preferences.LocalNavController
-import app.lawnchair.ui.preferences.components.AnnouncementPreference
 import app.lawnchair.ui.preferences.components.controls.PreferenceCategory
-import app.lawnchair.ui.preferences.components.controls.WarningPreference
 import app.lawnchair.ui.preferences.components.layout.ClickableIcon
 import app.lawnchair.ui.preferences.components.layout.DividerColumn
 import app.lawnchair.ui.preferences.components.layout.PreferenceDivider
 import app.lawnchair.ui.preferences.components.layout.PreferenceLayout
 import app.lawnchair.ui.preferences.components.layout.PreferenceTemplate
-import app.lawnchair.ui.preferences.data.liveinfo.SyncLiveInformation
-import app.lawnchair.ui.preferences.navigation.About
 import app.lawnchair.ui.preferences.navigation.AppDrawer
 import app.lawnchair.ui.preferences.navigation.CreateBackup
 import app.lawnchair.ui.preferences.navigation.DebugMenu
@@ -74,7 +70,6 @@ import app.lawnchair.ui.theme.preferenceGroupColor
 import app.lawnchair.ui.util.addIf
 import app.lawnchair.util.isDefaultLauncher
 import app.lawnchair.util.restartLauncher
-import com.android.launcher3.BuildConfig
 import com.android.launcher3.R
 
 @Composable
@@ -84,7 +79,6 @@ fun PreferencesDashboard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    SyncLiveInformation()
     val pref2 = preferenceManager2()
 
     PreferenceLayout(
@@ -94,13 +88,6 @@ fun PreferencesDashboard(
         backArrowVisible = false,
         actions = { PreferencesOverflowMenu(currentRoute = currentRoute, onNavigate = onNavigate) },
     ) {
-        AnnouncementPreference()
-
-        if (BuildConfig.APPLICATION_ID.contains("nightly") || BuildConfig.DEBUG) {
-            PreferencesDebugWarning()
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
         if (!context.isDefaultLauncher()) {
             PreferencesSetDefaultLauncherWarning()
             Spacer(modifier = Modifier.height(8.dp))
@@ -172,14 +159,6 @@ fun PreferencesDashboard(
                 iconResource = R.drawable.ic_gestures,
                 onNavigate = { onNavigate(Gestures) },
                 isSelected = currentRoute is Gestures,
-            )
-
-            PreferenceCategory(
-                label = stringResource(R.string.about_label),
-                description = "${context.getString(R.string.derived_app_name)} ${BuildConfig.VERSION_NAME}",
-                iconResource = R.drawable.ic_about,
-                onNavigate = { onNavigate(About) },
-                isSelected = currentRoute is About,
             )
         }
     }
@@ -324,22 +303,6 @@ fun RowScope.PreferencesOverflowMenu(
             text = {
                 Text(text = stringResource(id = R.string.restore_backup))
             },
-        )
-    }
-}
-
-@Composable
-fun PreferencesDebugWarning(
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.errorContainer,
-    ) {
-        WarningPreference(
-            // Don't move to strings.xml, no need to translate this warning
-            text = "You are using a development build, which may contain bugs and broken features. Use at your own risk!",
         )
     }
 }
