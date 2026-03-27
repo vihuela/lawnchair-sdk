@@ -1,2 +1,5 @@
 jdk:
   - openjdk17
+
+install:
+  - ./gradlew -p sdk-local :launcher-sdk-api:publishToMavenLocal :launcher-core:publishToMavenLocal
