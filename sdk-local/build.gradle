@@ -1,7 +1,9 @@
 import com.android.build.gradle.api.AndroidBasePlugin
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.publish.maven.MavenPublication
 
 plugins {
     alias(libs.plugins.android.application) apply false
@@ -20,8 +22,17 @@ final def appCompileSdk = 36
 final def appCompileSdkMinor = 1
 final def appMinSdk = 26
 final def appTargetSdk = 35
+final def sdkPublishGroup = providers.environmentVariable("GROUP")
+    .orElse(providers.gradleProperty("PUBLISH_GROUP"))
+    .orElse("app.lawnchair")
+final def sdkPublishVersion = providers.environmentVariable("VERSION")
+    .orElse(providers.gradleProperty("PUBLISH_VERSION"))
+    .orElse("0.1.0-local")
 
 allprojects {
+    group = sdkPublishGroup.get()
+    version = sdkPublishVersion.get()
+
     plugins.withType(AndroidBasePlugin).configureEach {
         android {
             buildToolsVersion "36.1.0"
@@ -126,6 +137,36 @@ allprojects {
                 compileOnly projects.compatLib.compatLibVT
                 compileOnly projects.compatLib.compatLibVU
                 compileOnly projects.compatLib.compatLibVV
+            }
+        }
+    }
+}
+
+subprojects { subproject ->
+    plugins.withId("com.android.library") {
+        if (subproject.name in ["launcher-core", "launcher-sdk-api"]) {
+            return
+        }
+
+        subproject.pluginManager.apply("maven-publish")
+        subproject.extensions.configure(LibraryExtension) { libraryExtension ->
+            libraryExtension.publishing {
+                singleVariant("release") {
+                }
+            }
+        }
+        subproject.afterEvaluate {
+            publishing {
+                publications {
+                    if (findByName("release") == null) {
+                        register("release", MavenPublication) {
+                            groupId = sdkPublishGroup.get()
+                            artifactId = subproject.name
+                            version = sdkPublishVersion.get()
+                            from components.release
+                        }
+                    }
+                }
             }
         }
     }
