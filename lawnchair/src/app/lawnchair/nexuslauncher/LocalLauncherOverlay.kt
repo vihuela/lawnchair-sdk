@@ -17,9 +17,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.sdk.LawnchairSdkRegistry
+import app.lawnchair.sdk.api.MinusOneOverlayState
 import app.lawnchair.ui.theme.LawnchairTheme
 import com.android.launcher3.InsettableFrameLayout
-import com.android.launcher3.LauncherRootView
 import com.android.launcher3.R
 import com.android.launcher3.Utilities
 import com.android.systemui.plugins.shared.LauncherOverlayManager
@@ -39,6 +39,7 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     private var isAdded = false
     private var isEnabled = true
     private var screenWidth = 0
+    private var lastReportedOverlayState: MinusOneOverlayState? = null
 
     private var touchDownX = 0f
     private var touchDownY = 0f
@@ -106,6 +107,13 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     override fun openOverlay() {
         if (!isEnabled) return
         animateToProgress(1f)
+    }
+
+    fun openOverlayImmediately() {
+        if (!isEnabled) return
+        progressAnimator?.cancel()
+        updateOverlayPosition(1f)
+        launcherCallbacks?.onOverlayScrollChanged(1f)
     }
 
     override fun onAttachedToWindow() {
@@ -238,7 +246,7 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     private fun addToLauncherRootView() {
         if (isAdded) return
 
-        val rootView = launcher.rootView as? LauncherRootView ?: return
+        val rootView = launcher.rootView ?: return
         val params = InsettableFrameLayout.LayoutParams(
             ensureScreenWidth(),
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -268,6 +276,7 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
         currentProgress = progress.coerceIn(0f, 1f)
         val width = ensureScreenWidth().toFloat()
         overlayContainer?.translationX = -width * (1f - currentProgress)
+        dispatchOverlayState(currentProgress)
     }
 
     private fun ensureScreenWidth(): Int {
@@ -286,8 +295,9 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
         progressAnimator?.cancel()
         progressAnimator = null
         launcherCallbacks = null
+        lastReportedOverlayState = null
 
-        val rootView = launcher.rootView as? LauncherRootView
+        val rootView = launcher.rootView
         if (isAdded && rootView != null) {
             rootView.removeView(overlayContainer)
         }
@@ -301,9 +311,25 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
 
     fun isOnOverlay(): Boolean = currentProgress >= 0.99f
 
+    private fun dispatchOverlayState(progress: Float, force: Boolean = false) {
+        val normalizedProgress = progress.coerceIn(0f, 1f)
+        val state = when {
+            normalizedProgress <= CLOSED_PROGRESS_EPSILON -> MinusOneOverlayState.Closed
+            normalizedProgress >= OPENED_PROGRESS_EPSILON -> MinusOneOverlayState.Opened
+            else -> MinusOneOverlayState.Sliding
+        }
+        if (!force && state == lastReportedOverlayState && state != MinusOneOverlayState.Sliding) {
+            return
+        }
+        lastReportedOverlayState = state
+        LawnchairSdkRegistry.dispatchMinusOneOverlayState(state, normalizedProgress)
+    }
+
     companion object {
         private const val ANIMATION_DURATION_MS = 250L
         private const val SWITCH_THRESHOLD = 0.3f
+        private const val CLOSED_PROGRESS_EPSILON = 0.01f
+        private const val OPENED_PROGRESS_EPSILON = 0.99f
     }
 }
 

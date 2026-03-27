@@ -156,6 +156,10 @@ class LawnchairLauncher : QuickstepLauncher() {
         super.onCreate(savedInstanceState)
         localOverlay?.initialize()
         localOverlay?.setEnabled(shouldEnableLocalMinusOne())
+        val shouldOpenMinusOneOnLaunch = LawnchairSdkRegistry.openMinusOneOnLauncherLaunch
+        if (shouldOpenMinusOneOnLaunch) {
+            openMinusOneImmediatelyOnLaunch()
+        }
         pendingOpenMinusOne = intent?.getBooleanExtra(EXTRA_OPEN_MINUS_ONE, false) == true
         maybeSyncSdkDesktopItems()
         maybeOpenPendingMinusOne()
@@ -492,6 +496,14 @@ class LawnchairLauncher : QuickstepLauncher() {
         }
         pendingOpenMinusOne = false
         dragLayer.post { getDefaultOverlay().openOverlay() }
+    }
+
+    private fun openMinusOneImmediatelyOnLaunch() {
+        if (!shouldEnableLocalMinusOne()) {
+            return
+        }
+        pendingOpenMinusOne = false
+        localOverlay?.openOverlayImmediately()
     }
 
     fun openMinusOneAnimated(): Boolean {

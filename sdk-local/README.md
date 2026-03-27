@@ -31,8 +31,8 @@ Optional custom coordinates:
 2. Create and push a tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 3. Wait for JitPack to finish building the tag.
@@ -40,8 +40,8 @@ git push origin v0.1.0
 Dependency coordinates:
 
 ```text
-com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.0
-com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.0
+com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.4
+com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.4
 ```
 
 Consumer repositories:
