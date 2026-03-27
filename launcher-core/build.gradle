@@ -11,6 +11,7 @@ plugins {
     alias(libs.plugins.google.ksp)
     alias(libs.plugins.google.protobuf)
     alias(libs.plugins.rikka.refine)
+    id "maven-publish"
 }
 
 def launcherMinSdk = 26
@@ -22,6 +23,12 @@ def launcherCommitHash = providers.exec {
     workingDir projectDir
     commandLine('git', 'rev-parse', '--short=7', 'HEAD')
 }.standardOutput.asText.get().trim()
+def sdkPublishGroup = providers.environmentVariable("GROUP")
+    .orElse(providers.gradleProperty("PUBLISH_GROUP"))
+    .orElse("app.lawnchair")
+def sdkPublishVersion = providers.environmentVariable("VERSION")
+    .orElse(providers.gradleProperty("PUBLISH_VERSION"))
+    .orElse("0.1.0-local")
 
 android {
     namespace "com.android.launcher3"
@@ -117,6 +124,12 @@ android {
             res.srcDirs = ['../quickstep/res', '../quickstep/recents_ui_overrides/res']
             java.srcDirs = ['../quickstep/src', '../quickstep/recents_ui_overrides/src']
             manifest.srcFile "../quickstep/AndroidManifest.xml"
+        }
+    }
+
+    publishing {
+        singleVariant("lawnWithQuickstepGithubRelease") {
+            withSourcesJar()
         }
     }
 }
@@ -261,5 +274,37 @@ tasks.matching { it.name.startsWith("sync") && it.name.endsWith("LibJars") }.con
     typedefRecipe.parentFile.mkdirs()
     if (!typedefRecipe.exists()) {
         typedefRecipe.text = ""
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register("release", MavenPublication) {
+                groupId = sdkPublishGroup.get()
+                artifactId = "launcher-core"
+                version = sdkPublishVersion.get()
+                from components.lawnWithQuickstepGithubRelease
+
+                pom {
+                    name = "Lawnchair SDK Core"
+                    description = "Embeddable Lawnchair launcher runtime with SDK extension hooks."
+                    url = "https://github.com/vihuela/lawnchair-sdk"
+
+                    licenses {
+                        license {
+                            name = "Apache License, Version 2.0"
+                            url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                        }
+                    }
+
+                    scm {
+                        url = "https://github.com/vihuela/lawnchair-sdk"
+                        connection = "scm:git:https://github.com/vihuela/lawnchair-sdk.git"
+                        developerConnection = "scm:git:ssh://git@github.com/vihuela/lawnchair-sdk.git"
+                    }
+                }
+            }
+        }
     }
 }

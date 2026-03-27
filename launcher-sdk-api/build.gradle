@@ -2,7 +2,15 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id "maven-publish"
 }
+
+def sdkPublishGroup = providers.environmentVariable("GROUP")
+    .orElse(providers.gradleProperty("PUBLISH_GROUP"))
+    .orElse("app.lawnchair")
+def sdkPublishVersion = providers.environmentVariable("VERSION")
+    .orElse(providers.gradleProperty("PUBLISH_VERSION"))
+    .orElse("0.1.0-local")
 
 android {
     namespace "app.lawnchair.sdk.api"
@@ -13,6 +21,12 @@ android {
 
     buildFeatures {
         buildConfig false
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
     }
 }
 
@@ -60,4 +74,36 @@ def debugTypedefRecipe = file("$buildDir/intermediates/annotations_typedef_file/
 debugTypedefRecipe.parentFile.mkdirs()
 if (!debugTypedefRecipe.exists()) {
     debugTypedefRecipe.text = ""
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register("release", MavenPublication) {
+                groupId = sdkPublishGroup.get()
+                artifactId = "launcher-sdk-api"
+                version = sdkPublishVersion.get()
+                from components.release
+
+                pom {
+                    name = "Lawnchair SDK API"
+                    description = "Public API surface for integrating with Lawnchair SDK features."
+                    url = "https://github.com/vihuela/lawnchair-sdk"
+
+                    licenses {
+                        license {
+                            name = "Apache License, Version 2.0"
+                            url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                        }
+                    }
+
+                    scm {
+                        url = "https://github.com/vihuela/lawnchair-sdk"
+                        connection = "scm:git:https://github.com/vihuela/lawnchair-sdk.git"
+                        developerConnection = "scm:git:ssh://git@github.com/vihuela/lawnchair-sdk.git"
+                    }
+                }
+            }
+        }
+    }
 }
