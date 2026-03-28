@@ -62,6 +62,7 @@ The goal of this fork is to keep Lawnchair’s launcher runtime, but make it eas
 | Listen to minus-one opened/closed/sliding state | `app.lawnchair.sdk.api.MinusOneOverlayStateListener` |
 | Decide whether launcher cold start should land in minus-one | `LawnchairSdkEntry.openMinusOneOnLauncherLaunch` |
 | Open minus-one with launcher animation | `app.lawnchair.sdk.LawnchairOperations.openMinusOneAnimated()` |
+| Listen for desktop becoming visible with return source classification, dispatched on the next main-thread turn after visibility is confirmed so host apps can safely schedule lightweight dialogs | `app.lawnchair.sdk.api.DesktopVisibleListener`, `app.lawnchair.sdk.api.DesktopVisibleSource` |
 | Inject custom desktop icons | `app.lawnchair.sdk.api.DesktopItemProvider` |
 | Control whether injected desktop icons can be dragged to delete area | `DesktopItemSpec.allowDragToDelete` |
 | Handle injected desktop icon callbacks | `DesktopItemProvider.onDesktopItemAction()` |

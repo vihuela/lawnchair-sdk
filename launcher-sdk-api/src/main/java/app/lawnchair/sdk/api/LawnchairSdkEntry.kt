@@ -10,6 +10,9 @@ interface LawnchairSdkEntry {
     val minusOneOverlayStateListener: MinusOneOverlayStateListener?
         get() = null
 
+    val desktopVisibleListener: DesktopVisibleListener?
+        get() = null
+
     val desktopItemProvider: DesktopItemProvider?
         get() = null
 }

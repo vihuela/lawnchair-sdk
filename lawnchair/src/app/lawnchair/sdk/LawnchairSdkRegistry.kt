@@ -1,6 +1,8 @@
 package app.lawnchair.sdk
 
 import app.lawnchair.sdk.api.LawnchairSdkEntry
+import app.lawnchair.sdk.api.DesktopVisibleListener
+import app.lawnchair.sdk.api.DesktopVisibleSource
 import app.lawnchair.sdk.api.DesktopItemProvider
 import app.lawnchair.sdk.api.MinusOneContentProvider
 import app.lawnchair.sdk.api.MinusOneOverlayState
@@ -21,6 +23,9 @@ internal object LawnchairSdkRegistry {
     val minusOneOverlayStateListener: MinusOneOverlayStateListener?
         get() = entry.minusOneOverlayStateListener
 
+    val desktopVisibleListener: DesktopVisibleListener?
+        get() = entry.desktopVisibleListener
+
     val hasMinusOneContentProvider: Boolean
         get() = minusOneContentProvider != null
 
@@ -30,6 +35,10 @@ internal object LawnchairSdkRegistry {
 
     fun dispatchMinusOneOverlayState(state: MinusOneOverlayState, progress: Float) {
         minusOneOverlayStateListener?.onStateChanged(state, progress)
+    }
+
+    fun dispatchDesktopVisible(source: DesktopVisibleSource) {
+        desktopVisibleListener?.onDesktopVisible(source)
     }
 }
 

@@ -45,6 +45,7 @@ import app.lawnchair.nexuslauncher.OverlayCallbackImpl
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.sdk.LawnchairSdkRegistry
+import app.lawnchair.sdk.SdkDesktopVisibilityReporter
 import app.lawnchair.sdk.SdkDesktopItemsSynchronizer
 import app.lawnchair.theme.ThemeProvider
 import app.lawnchair.ui.popup.LauncherOptionsPopup
@@ -98,6 +99,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     private var hasSyncedSdkDesktopItems = false
     private var hasPendingSdkDesktopItemsRetry = false
     private var pendingOpenMinusOne = false
+    private lateinit var sdkDesktopVisibilityReporter: SdkDesktopVisibilityReporter
     private val sdkDesktopItemsRetryRunnable = Runnable {
         hasPendingSdkDesktopItemsRetry = false
         maybeSyncSdkDesktopItems()
@@ -154,6 +156,10 @@ class LawnchairLauncher : QuickstepLauncher() {
         layoutInflater.factory2 = LawnchairLayoutFactory(this)
         localOverlay = LocalLauncherOverlay(this)
         super.onCreate(savedInstanceState)
+        sdkDesktopVisibilityReporter = SdkDesktopVisibilityReporter(this).also {
+            it.onCreate(savedInstanceState)
+            launcher.stateManager.addStateListener(it)
+        }
         localOverlay?.initialize()
         localOverlay?.setEnabled(shouldEnableLocalMinusOne())
         val shouldOpenMinusOneOnLaunch = LawnchairSdkRegistry.openMinusOneOnLauncherLaunch
@@ -285,6 +291,7 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     override fun finishBindingItems(pagesBoundFirst: IntSet?) {
         super.finishBindingItems(pagesBoundFirst)
+        sdkDesktopVisibilityReporter.onWorkspaceBindingComplete()
         maybeSyncSdkDesktopItems()
         maybeOpenPendingMinusOne()
     }
@@ -412,6 +419,21 @@ class LawnchairLauncher : QuickstepLauncher() {
         )
     }
 
+    override fun onPause() {
+        sdkDesktopVisibilityReporter.onPause()
+        super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        sdkDesktopVisibilityReporter.onWindowFocusChanged(hasFocus)
+    }
+
+    override fun onDeferredResumed() {
+        super.onDeferredResumed()
+        sdkDesktopVisibilityReporter.onDeferredResumed()
+    }
+
     override fun onStateBack() {
         if (localOverlay?.isOverlayVisible() == true) {
             localOverlay?.hideOverlay(true)
@@ -422,12 +444,14 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     override fun onDestroy() {
         Executors.MAIN_EXECUTOR.handler.removeCallbacks(sdkDesktopItemsRetryRunnable)
+        launcher.stateManager.removeStateListener(sdkDesktopVisibilityReporter)
         super.onDestroy()
         // Only actually closes if required, safe to call if not enabled
         SmartspacerClient.close()
     }
 
     override fun onNewIntent(intent: Intent) {
+        sdkDesktopVisibilityReporter.onMainIntentReceived(intent)
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_MINUS_ONE, false)) {
             pendingOpenMinusOne = true
@@ -495,6 +519,7 @@ class LawnchairLauncher : QuickstepLauncher() {
             return
         }
         pendingOpenMinusOne = false
+        sdkDesktopVisibilityReporter.onMinusOneWillOpen()
         dragLayer.post { getDefaultOverlay().openOverlay() }
     }
 
@@ -503,6 +528,7 @@ class LawnchairLauncher : QuickstepLauncher() {
             return
         }
         pendingOpenMinusOne = false
+        sdkDesktopVisibilityReporter.onMinusOneWillOpen()
         localOverlay?.openOverlayImmediately()
     }
 
@@ -511,6 +537,10 @@ class LawnchairLauncher : QuickstepLauncher() {
         pendingOpenMinusOne = true
         maybeOpenPendingMinusOne()
         return true
+    }
+
+    internal fun onLocalMinusOneOverlayStateChanged(state: app.lawnchair.sdk.api.MinusOneOverlayState) {
+        sdkDesktopVisibilityReporter.onMinusOneStateChanged(state)
     }
 
     companion object {

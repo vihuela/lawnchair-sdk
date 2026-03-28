@@ -322,6 +322,7 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
             return
         }
         lastReportedOverlayState = state
+        launcher.onLocalMinusOneOverlayStateChanged(state)
         LawnchairSdkRegistry.dispatchMinusOneOverlayState(state, normalizedProgress)
     }
 
