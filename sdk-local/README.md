@@ -21,7 +21,7 @@ Optional custom coordinates:
 ```bash
 ./gradlew \
   -PPUBLISH_GROUP=com.github.vihuela.lawnchair-sdk \
-  -PPUBLISH_VERSION=0.1.7-local \
+  -PPUBLISH_VERSION=0.1.8-local \
   :launcher-sdk-api:publishToMavenLocal \
   :launcher-core:publishToMavenLocal
 ```
@@ -32,8 +32,8 @@ Optional custom coordinates:
 2. Create and push a tag:
 
 ```bash
-git tag v0.1.7
-git push origin v0.1.7
+git tag v0.1.8
+git push origin v0.1.8
 ```
 
 3. Wait for JitPack to finish building the tag.
@@ -41,8 +41,8 @@ git push origin v0.1.7
 Dependency coordinates:
 
 ```text
-com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.7
-com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.7
+com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.8
+com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.8
 ```
 
 Consumer repositories:
@@ -63,7 +63,7 @@ dependencyResolutionManagement {
 This section is the migration memo for rebasing this SDK branch onto a newer upstream Lawnchair branch later.
 
 - Upstream baseline before SDK customization: `854f2c036a` (`裁剪系统权限、一般app无关权限`)
-- Current release target: `v0.1.7`
+- Current release target: `v0.1.8`
 - Migration goal: when moving to a new upstream branch, re-apply the capabilities below in order instead of rediscovering them from scratch.
 
 ### Commit milestones
@@ -79,6 +79,7 @@ This section is the migration memo for rebasing this SDK branch onto a newer ups
 | 7 | `e1b64d1fcb` | 负一屏启动能力 | 增加动画打开负一屏等公开操作能力。 |
 | 8 | `v0.1.5` | 宿主 `Application` 兼容 | 解决本地 `includeBuild` 时宿主不继承 `LawnchairApp` 也能初始化 SDK。 |
 | 9 | `v0.1.7` 本次 | 桌面可见回调 | 新增桌面完全展示来源回调，回调确认可见后再延后一拍派发，更适合业务侧做轻量弹框；同时移除未使用的 `Unknown` 来源。 |
+| 10 | `v0.1.8` 本次 | Smartspace 首次引导卡裁剪 | 去掉桌面顶部 Smartspace 的“点击以设置”引导卡，只保留真实的时间、充电等卡片内容。 |
 
 ### Capability delta matrix
 

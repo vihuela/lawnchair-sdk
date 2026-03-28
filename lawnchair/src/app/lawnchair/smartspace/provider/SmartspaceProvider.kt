@@ -2,12 +2,7 @@ package app.lawnchair.smartspace.provider
 
 import android.app.Activity
 import android.content.Context
-import app.lawnchair.smartspace.model.SmartspaceAction
-import app.lawnchair.smartspace.model.SmartspaceTarget
-import app.lawnchair.ui.preferences.PreferenceActivity
-import app.lawnchair.ui.preferences.navigation.Smartspace
 import app.lawnchair.util.dropWhileBusy
-import com.android.launcher3.R
 import com.android.launcher3.util.MainThreadInitializedObject
 import com.android.launcher3.util.SafeCloseable
 import kotlinx.coroutines.MainScope
@@ -32,27 +27,9 @@ class SmartspaceProvider private constructor(context: Context) : SafeCloseable {
             SharingStarted.WhileSubscribed(),
             replay = 1,
         )
-    val targets = state
-        .map {
-            if (it.requiresSetup.isNotEmpty()) {
-                listOf(setupTarget) + it.targets
-            } else {
-                it.targets
-            }
-        }
+    val targets = state.map { it.targets }
     val previewTargets = state
         .map { it.targets }
-
-    private val setupTarget = SmartspaceTarget(
-        id = "smartspaceSetup",
-        headerAction = SmartspaceAction(
-            id = "smartspaceSetupAction",
-            title = context.getString(R.string.smartspace_requires_setup),
-            intent = PreferenceActivity.createIntent(context, Smartspace),
-        ),
-        score = 999f,
-        featureType = SmartspaceTarget.FeatureType.FEATURE_TIPS,
-    )
 
     suspend fun startSetup(activity: Activity) {
         state
