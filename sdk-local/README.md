@@ -21,7 +21,7 @@ Optional custom coordinates:
 ```bash
 ./gradlew \
   -PPUBLISH_GROUP=com.github.vihuela.lawnchair-sdk \
-  -PPUBLISH_VERSION=0.1.5-local \
+  -PPUBLISH_VERSION=0.1.6-local \
   :launcher-sdk-api:publishToMavenLocal \
   :launcher-core:publishToMavenLocal
 ```
@@ -32,8 +32,8 @@ Optional custom coordinates:
 2. Create and push a tag:
 
 ```bash
-git tag v0.1.5
-git push origin v0.1.5
+git tag v0.1.6
+git push origin v0.1.6
 ```
 
 3. Wait for JitPack to finish building the tag.
@@ -41,8 +41,8 @@ git push origin v0.1.5
 Dependency coordinates:
 
 ```text
-com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.5
-com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.5
+com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.1.6
+com.github.vihuela.lawnchair-sdk:launcher-core:v0.1.6
 ```
 
 Consumer repositories:
@@ -63,7 +63,7 @@ dependencyResolutionManagement {
 This section is the migration memo for rebasing this SDK branch onto a newer upstream Lawnchair branch later.
 
 - Upstream baseline before SDK customization: `854f2c036a` (`裁剪系统权限、一般app无关权限`)
-- Current release target: `v0.1.5`
+- Current release target: `v0.1.6`
 - Migration goal: when moving to a new upstream branch, re-apply the capabilities below in order instead of rediscovering them from scratch.
 
 ### Commit milestones
@@ -88,7 +88,7 @@ This section is the migration memo for rebasing this SDK branch onto a newer ups
 | 发布与远程依赖 | 增加 Maven 发布、JitPack 构建、传递依赖发布、本地 `publishToMavenLocal` 验证链路。 | `launcher-core/build.gradle`, `launcher-sdk-api/build.gradle`, `jitpack.yml`, `sdk-local/build.gradle`, `sdk-local/settings.gradle`, `sdk-local/gradle.properties` | 这部分通常和 upstream 业务代码冲突较少，适合尽早恢复。 |
 | 宿主接入入口 | 对外暴露 `LawnchairSdkEntry`、`LawnchairOperations`、`DesktopItemProvider`、`MinusOneContentProvider` 等 API，宿主可只接 SDK API 层。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/**`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/**` | 未来如果继续扩展能力，优先放在 `launcher-sdk-api`，避免外部依赖 `launcher-core` 细节。 |
 | 负一屏 SDK 化 | Google feed 入口改成本地负一屏，业务侧可注入纯 Compose 内容；支持启动时直接进入负一屏、动画打开负一屏、负一屏状态监听。 | `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt`, `lawnchair/src/app/lawnchair/nexuslauncher/OverlayCallbackImpl.kt`, `lawnchair/src/app/lawnchair/LawnchairLauncher.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneContentProvider.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneOverlayState.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/LawnchairSdkEntry.kt`, `lawnchair/src/app/lawnchair/sdk/PublicLawnchairOperations.kt` | 这是和 upstream launcher 行为冲突最高的区域之一，新 upstream 如果又改了 overlay 手势/Workspace 左滑逻辑，需要优先对比这里。 |
-| 桌面业务入口开放 | 业务侧可声明桌面图标数据和点击回调，支持显式 `Intent` 和 provider action 两类点击行为。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/DesktopItemProvider.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemsSynchronizer.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemActionDispatcher.kt`, `src/com/android/launcher3/touch/ItemClickHandler.java` | 这里的核心是“稳定 ID + 首次落位后保留用户移动结果”，迁移时不要只恢复插入逻辑，持久化和点击分发也要一起带上。 |
+| 桌面业务入口开放 | 业务侧可声明桌面图标数据和点击回调，支持显式 `Intent` 和 provider action 两类点击行为，并可通过 `DesktopItemSpec.allowDragToDelete` 控制是否允许拖到删除区域。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/DesktopItemProvider.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemsSynchronizer.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemActionDispatcher.kt`, `src/com/android/launcher3/DeleteDropTarget.java`, `src/com/android/launcher3/touch/ItemClickHandler.java` | 这里的核心是“稳定 ID + 首次落位后保留用户移动结果”。如果未来继续扩展桌面 icon 能力，这一组持久化和拖拽控制逻辑要一起迁回。 |
 | 默认桌面与布局定制 | 默认 `default_workspace_4x5` 被定制过，Google 文件夹、设置位置和 Demo 入口都做过调整。 | `lawnchair/res/xml/default_workspace_4x5.xml`, `src/com/android/launcher3/model/WorkspaceItemProcessor.kt`, `src/com/android/launcher3/model/BgDataModel.java` | 这类资源冲突简单，但容易被 upstream 覆盖，迁移后要重新核对默认布局是否符合 SDK 预期。 |
 | 设置页与功能开关裁剪 | 去掉大量和一般宿主 app 无关的设置项与调试入口，例如关于页、实验功能、部分搜索/Quickstep/Google Feed 开关。 | `lawnchair/src/app/lawnchair/ui/preferences/**`, `lawnchair/res/values/strings.xml`, `lawnchair/res/values/config.xml`, `quickstep/src/com/android/launcher3/uioverrides/flags/DevOptionsUiHelper.kt` | 如果新 upstream 设置结构变化大，不必逐文件硬搬，按“只保留 SDK 必需入口”重新裁即可。 |
 | 宿主 `Application` 兼容 | 解决 `includeBuild` 本地源码接入时，宿主 app 不再必须继承 `LawnchairApp`；新增反射初始化和 host runtime，尽量少改原有 `LawnchairApp` 逻辑。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairSdkHost.kt`, `lawnchair/src/app/lawnchair/LawnchairHostRuntime.kt`, `lawnchair/src/app/lawnchair/LawnchairApp.kt`, `src/com/android/launcher3/LauncherAppState.java`, `src/com/android/launcher3/model/ModelDbController.java`, `quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java`, `src/com/android/launcher3/dragndrop/DragController.java`, `lawnchair/src/app/lawnchair/util/FileExtensions.kt`, `lawnchair/src/app/lawnchair/util/LawnchairHostInfo.kt`, `launcher-core/consumer-rules.pro` | 这部分是为了让本地源码依赖和远程依赖行为保持一致。新 upstream 迁移时，如果宿主接入再次出现 `LawnchairApp` 强依赖崩溃，优先把这组改动整体带回。 |

@@ -34,6 +34,7 @@ import com.android.launcher3.model.data.WorkspaceItemInfo;
 import com.patrykmichalik.opto.core.PreferenceExtensionsKt;
 
 import app.lawnchair.preferences2.PreferenceManager2;
+import app.lawnchair.sdk.SdkDesktopItemActionDispatcher;
 
 public class DeleteDropTarget extends ButtonDropTarget {
 
@@ -94,7 +95,8 @@ public class DeleteDropTarget extends ButtonDropTarget {
 
     @Override
     protected boolean supportsDrop(ItemInfo info) {
-        return true;
+        return info.id == ItemInfo.NO_ID
+                || SdkDesktopItemActionDispatcher.isDragToDeleteAllowed(info);
     }
 
     /**
@@ -116,6 +118,9 @@ public class DeleteDropTarget extends ButtonDropTarget {
     }
 
     private boolean canRemove(ItemInfo item) {
+        if (!SdkDesktopItemActionDispatcher.isDragToDeleteAllowed(item)) {
+            return false;
+        }
         boolean isDeckLayoutFirst = PreferenceExtensionsKt.firstBlocking(pref2.getDeckLayout());
         return isDeckLayoutFirst ? isCanDrop(item) : item.id != ItemInfo.NO_ID;
     }

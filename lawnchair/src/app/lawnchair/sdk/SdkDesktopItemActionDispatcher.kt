@@ -4,12 +4,15 @@ import android.content.Context
 import android.content.Intent
 import app.lawnchair.sdk.api.DesktopItemClickAction
 import app.lawnchair.sdk.api.DesktopItemSpec
+import com.android.launcher3.model.data.ItemInfo
 
 object SdkDesktopItemActionDispatcher {
     private const val ACTION_DESKTOP_ITEM_PROVIDER = "app.lawnchair.sdk.action.DESKTOP_ITEM_PROVIDER"
 
     const val EXTRA_DESKTOP_ITEM_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ID"
     const val EXTRA_DESKTOP_ITEM_ICON_RES_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ICON_RES_ID"
+    const val EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE =
+        "app.lawnchair.sdk.extra.DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE"
 
     private const val EXTRA_DESKTOP_ITEM_ACTION_KIND = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ACTION_KIND"
     private const val EXTRA_DESKTOP_ITEM_ACTION_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ACTION_ID"
@@ -32,7 +35,17 @@ object SdkDesktopItemActionDispatcher {
         return baseIntent.apply {
             putExtra(EXTRA_DESKTOP_ITEM_ID, stableId)
             putExtra(EXTRA_DESKTOP_ITEM_ICON_RES_ID, spec.iconResId)
+            putExtra(EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE, spec.allowDragToDelete)
         }
+    }
+
+    @JvmStatic
+    fun isDragToDeleteAllowed(info: ItemInfo?): Boolean {
+        val intent = info?.intent ?: return true
+        if (!intent.hasExtra(EXTRA_DESKTOP_ITEM_ID)) {
+            return true
+        }
+        return intent.getBooleanExtra(EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE, true)
     }
 
     @JvmStatic

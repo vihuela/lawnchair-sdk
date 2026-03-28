@@ -20,6 +20,7 @@ data class DesktopItemSpec(
     val clickAction: DesktopItemClickAction,
     val placement: DesktopItemPlacement,
     val id: String = "",
+    val allowDragToDelete: Boolean = true,
 )
 
 sealed interface DesktopItemClickAction {
