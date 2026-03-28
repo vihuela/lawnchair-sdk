@@ -23,6 +23,78 @@ Lawnchair is a free, open-source home app for Android. Taking Launcher3—Androi
 
 This branch houses the codebase of Lawnchair 15, which is currently in beta and is based on Launcher3 from Android 15. For Lawnchair 9 to 14, see the branches with the `9-` to `14-` prefixes, respectively.
 
+## SDK Fork Overview
+
+This repository is not a vanilla upstream Lawnchair checkout. The `feature/sdk-15` branch is an SDK-oriented fork used to expose selected launcher capabilities to host apps as reusable modules.
+
+### Upstream baseline
+
+| Item | Value |
+| --- | --- |
+| Upstream repository | `LawnchairLauncher/lawnchair` |
+| Upstream branch family | `15-dev`, `15-beta` |
+| Shared merge-base used by this SDK branch | `ae80519238` (`docs: Update changelog`) |
+| First SDK-side customization checkpoint | `854f2c036a` (`裁剪系统权限、一般app无关权限`) |
+| Current SDK release line | `v0.1.x` |
+
+### Why this fork exists
+
+The goal of this fork is to keep Lawnchair’s launcher runtime, but make it easier for a normal Android app to integrate only the needed launcher capabilities without having to understand the whole source tree first.
+
+### What was changed relative to upstream
+
+| Area | Summary | Key locations |
+| --- | --- | --- |
+| System feature trimming | Removed permissions, manifests, services, and feature entry points that are typically irrelevant or risky for a normal third-party app, such as root helpers, bugreport flow, accessibility/sleep related capabilities, and some SystemUI-coupled behavior. | `AndroidManifest-common.xml`, `lawnchair/AndroidManifest.xml`, `quickstep/AndroidManifest.xml`, `wmshell/AndroidManifest.xml`, `lawnchair/src/app/lawnchair/root/**`, `lawnchair/src/app/lawnchair/bugreport/**` |
+| SDK modularization | Split the fork into reusable SDK-facing modules so host apps can depend on a stable API surface instead of the full launcher internals. | `launcher-core/**`, `launcher-sdk-api/**`, `sdk-local/**`, `settings.gradle`, `build.gradle` |
+| Minus-one screen SDK | Replaced the original feed-oriented path with a local minus-one implementation that can render host-provided Compose content, support animated opening, optional auto-open on launcher start, and expose overlay state callbacks. | `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt`, `lawnchair/src/app/lawnchair/LawnchairLauncher.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneContentProvider.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneOverlayState.kt` |
+| Desktop item injection | Added an SDK path for host apps to inject icons into workspace positions with stable persistence, conflict handling, and click dispatch through either explicit `Intent` launch or provider-defined actions. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/DesktopItemProvider.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemsSynchronizer.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemActionDispatcher.kt` |
+| Public host operations | Exposed host-callable operations such as checking default launcher state, launching desktop, opening minus-one with animation, and opening launcher/home settings. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairOperations.kt`, `lawnchair/src/app/lawnchair/sdk/PublicLawnchairOperations.kt` |
+| Host `Application` compatibility | Added a runtime bridge so local `includeBuild` host apps no longer need to subclass `LawnchairApp`; they can initialize through a host-facing SDK entry while keeping most original `LawnchairApp` behavior intact. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairSdkHost.kt`, `lawnchair/src/app/lawnchair/LawnchairHostRuntime.kt`, `lawnchair/src/app/lawnchair/LawnchairApp.kt` |
+| Settings and UX trimming | Removed or simplified settings and debug surfaces that are not important for an embedded launcher SDK use case, including some about/experimental/search/feed related entries. | `lawnchair/src/app/lawnchair/ui/preferences/**`, `quickstep/src/com/android/launcher3/uioverrides/flags/DevOptionsUiHelper.kt`, `lawnchair/res/values/config.xml`, `lawnchair/res/values/strings.xml` |
+| Distribution and publishing | Added Maven publishing, JitPack support, and local-source integration helpers so the SDK can be consumed either remotely or via `includeBuild`. | `launcher-core/build.gradle`, `launcher-sdk-api/build.gradle`, `jitpack.yml`, `sdk-local/build.gradle`, `sdk-local/settings.gradle` |
+
+### Open capabilities exposed to host apps
+
+| Capability | API surface |
+| --- | --- |
+| Provide minus-one Compose UI | `app.lawnchair.sdk.api.MinusOneContentProvider` |
+| Listen to minus-one opened/closed/sliding state | `app.lawnchair.sdk.api.MinusOneOverlayStateListener` |
+| Decide whether launcher cold start should land in minus-one | `LawnchairSdkEntry.openMinusOneOnLauncherLaunch` |
+| Open minus-one with launcher animation | `app.lawnchair.sdk.LawnchairOperations.openMinusOneAnimated()` |
+| Inject custom desktop icons | `app.lawnchair.sdk.api.DesktopItemProvider` |
+| Handle injected desktop icon callbacks | `DesktopItemProvider.onDesktopItemAction()` |
+| Launch desktop / request default launcher / open launcher settings | `app.lawnchair.sdk.LawnchairOperations` |
+| Initialize SDK from a normal host `Application` | `app.lawnchair.sdk.LawnchairSdkHost.initialize()` |
+
+### Recommended porting order for a new upstream branch
+
+If this SDK fork needs to be adapted onto a newer upstream Lawnchair branch, apply changes in this order:
+
+1. Restore module split and publishing setup: `launcher-core`, `launcher-sdk-api`, `sdk-local`.
+2. Re-apply manifest, permission, and system-feature trimming.
+3. Reconnect public SDK API surfaces and registry wiring.
+4. Re-apply minus-one and desktop item business capabilities.
+5. Re-apply host `Application` compatibility and verify `includeBuild` behaves like remote dependency usage.
+
+### Files most likely to conflict during future rebases
+
+- `lawnchair/src/app/lawnchair/LawnchairApp.kt`
+- `lawnchair/src/app/lawnchair/LawnchairLauncher.kt`
+- `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt`
+- `quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java`
+- `src/com/android/launcher3/LauncherAppState.java`
+- `src/com/android/launcher3/model/ModelDbController.java`
+- `src/com/android/launcher3/touch/ItemClickHandler.java`
+- `src/com/android/launcher3/model/WorkspaceItemProcessor.kt`
+- `lawnchair/res/xml/default_workspace_4x5.xml`
+- `settings.gradle`
+- `build.gradle`
+
+### Detailed migration ledger
+
+For a more detailed, file-oriented migration memo from the SDK fork history, see [`sdk-local/README.md`](sdk-local/README.md). That document is intended to be imported by AI tools or future maintainers when porting this fork onto a newer upstream branch.
+
 ## Features
 
 -   **Material You Theming:** Adapts to your wallpaper and system theme.
