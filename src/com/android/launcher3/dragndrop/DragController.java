@@ -131,7 +131,7 @@ public abstract class DragController<T extends ActivityContext>
      */
     public DragController(T activity) {
         mActivity = activity;
-        pref2 = PreferenceManager2.getInstance(LawnchairApp.getInstance());
+        pref2 = PreferenceManager2.getInstance(LawnchairApp.getApplication());
     }
 
     /**

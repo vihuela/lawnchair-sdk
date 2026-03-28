@@ -88,7 +88,6 @@ import java.io.InputStream;
 import java.io.StringReader;
 
 import app.lawnchair.LawnchairApp;
-import app.lawnchair.LawnchairAppKt;
 
 /**
  * Utility class which maintains an instance of Launcher database and provides
@@ -122,9 +121,8 @@ public class ModelDbController {
 
         try {
             if (!forMigration && dbName != null) {
-                LawnchairApp app = LawnchairAppKt.getLawnchairApp(mContext);
-                app.renameRestoredDb(dbName);
-                app.migrateDbName(dbName);
+                LawnchairApp.renameRestoredDbCompat(dbName);
+                LawnchairApp.migrateDbNameCompat(dbName);
             }
         } catch (Throwable t) {
             // ignore
@@ -496,7 +494,7 @@ public class ModelDbController {
         createDbIfNotExists();
 
         if (!(mContext instanceof LauncherPreviewRenderer.PreviewContext)) {
-            LawnchairAppKt.getLawnchairApp(mContext).cleanUpDatabases();
+            LawnchairApp.cleanUpDatabasesCompat();
         }
 
         if (LauncherPrefs.get(mContext).get(getEmptyDbCreatedKey())) {

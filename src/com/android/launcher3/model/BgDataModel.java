@@ -166,7 +166,7 @@ public class BgDataModel {
                 screenSet.add(item.screenId);
             }
         }
-        if (FeatureFlags.topQsbOnFirstScreenEnabled(LawnchairApp.getInstance()) || screenSet.isEmpty()) {
+        if (FeatureFlags.topQsbOnFirstScreenEnabled(LawnchairApp.getApplication()) || screenSet.isEmpty()) {
             screenSet.add(Workspace.FIRST_SCREEN_ID);
         }
         return screenSet.getArray();

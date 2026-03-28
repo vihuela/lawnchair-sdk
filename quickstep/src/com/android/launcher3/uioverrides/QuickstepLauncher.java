@@ -270,7 +270,7 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer 
                 asContext(), deviceState);
         if (enableDesktopWindowingMode() && LawnchairApp.isRecentsEnabled()) {
             mDesktopRecentsTransitionController = new DesktopRecentsTransitionController(
-                    getStateManager(), systemUiProxy, LawnchairApp.getInstance().getIApplicationThread(),
+                    getStateManager(), systemUiProxy, LawnchairApp.getApplicationThread(),
                     getDepthController());
         }
         overviewPanel.init(mActionsView, mSplitSelectStateController,

@@ -65,7 +65,7 @@ import com.android.launcher3.util.Themes;
 import com.android.launcher3.util.TraceHelper;
 import com.android.launcher3.widget.custom.CustomWidgetManager;
 
-import app.lawnchair.LawnchairAppKt;
+import app.lawnchair.LawnchairApp;
 import app.lawnchair.icons.LawnchairIconProvider;
 
 public class LauncherAppState implements SafeCloseable {
@@ -79,7 +79,7 @@ public class LauncherAppState implements SafeCloseable {
         @Override
         protected void onPostInit(Context context) {
             super.onPostInit(context);
-            LawnchairAppKt.getLawnchairApp(context).onLauncherAppStateCreated();
+            LawnchairApp.onLauncherAppStateCreatedCompat();
         }
     };
 

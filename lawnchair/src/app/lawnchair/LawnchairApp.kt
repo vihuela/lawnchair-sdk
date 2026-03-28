@@ -19,6 +19,8 @@ package app.lawnchair
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
+import android.app.Application.ActivityLifecycleCallbacks
+import android.app.IApplicationThread
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
@@ -179,11 +181,67 @@ open class LawnchairApp : Application() {
         lateinit var instance: LawnchairApp
             private set
 
-        @JvmStatic
-        val isRecentsEnabled: Boolean get() = instance.recentsEnabled
+        @get:JvmStatic
+        val application: Application
+            get() = if (::instance.isInitialized) instance else LawnchairHostRuntime.requireApplication()
+
+        @get:JvmStatic
+        val isRecentsEnabled: Boolean
+            get() = if (::instance.isInitialized) instance.recentsEnabled else LawnchairHostRuntime.isRecentsEnabled
+
+        @get:JvmStatic
+        val isAtleastT: Boolean
+            get() = if (::instance.isInitialized) instance.isAtleastT else Utilities.ATLEAST_T
 
         @JvmStatic
-        val isAtleastT: Boolean get() = instance.isAtleastT
+        fun onLauncherAppStateCreatedCompat() {
+            if (::instance.isInitialized) {
+                instance.onLauncherAppStateCreated()
+            } else {
+                LawnchairHostRuntime.onLauncherAppStateCreated()
+            }
+        }
+
+        @JvmStatic
+        fun restartCompat(recreateLauncher: Boolean = true) {
+            if (::instance.isInitialized) {
+                instance.restart(recreateLauncher)
+            } else {
+                LawnchairHostRuntime.restart(recreateLauncher)
+            }
+        }
+
+        @JvmStatic
+        fun renameRestoredDbCompat(dbName: String) {
+            if (::instance.isInitialized) {
+                instance.renameRestoredDb(dbName)
+            } else {
+                LawnchairHostRuntime.renameRestoredDb(dbName)
+            }
+        }
+
+        @JvmStatic
+        fun migrateDbNameCompat(dbName: String) {
+            if (::instance.isInitialized) {
+                instance.migrateDbName(dbName)
+            } else {
+                LawnchairHostRuntime.migrateDbName(dbName)
+            }
+        }
+
+        @JvmStatic
+        fun cleanUpDatabasesCompat() {
+            if (::instance.isInitialized) {
+                instance.cleanUpDatabases()
+            } else {
+                LawnchairHostRuntime.cleanUpDatabases()
+            }
+        }
+
+        @JvmStatic
+        fun getApplicationThread(): IApplicationThread {
+            return application.iApplicationThread
+        }
 
         fun getUriForFile(context: Context, file: File): Uri {
             return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

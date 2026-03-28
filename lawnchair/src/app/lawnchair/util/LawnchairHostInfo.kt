@@ -11,7 +11,7 @@ object LawnchairHostInfo {
 
     @JvmStatic
     fun applicationId(): String {
-        return runCatching { LawnchairApp.instance.packageName }.getOrElse { BuildConfig.APPLICATION_ID }
+        return runCatching { LawnchairApp.application.packageName }.getOrElse { BuildConfig.APPLICATION_ID }
     }
 
     @JvmStatic
@@ -24,7 +24,7 @@ object LawnchairHostInfo {
 
     @JvmStatic
     fun versionCode(): Int {
-        return runCatching { versionCode(LawnchairApp.instance) }.getOrElse { BuildConfig.VERSION_CODE }
+        return runCatching { versionCode(LawnchairApp.application) }.getOrElse { BuildConfig.VERSION_CODE }
     }
 
     @JvmStatic
@@ -36,7 +36,7 @@ object LawnchairHostInfo {
 
     @JvmStatic
     fun versionName(): String {
-        return runCatching { versionName(LawnchairApp.instance) }.getOrElse { BuildConfig.VERSION_NAME }
+        return runCatching { versionName(LawnchairApp.application) }.getOrElse { BuildConfig.VERSION_NAME }
     }
 
     @JvmStatic

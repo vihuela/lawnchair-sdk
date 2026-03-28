@@ -445,7 +445,7 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     private fun restartIfPending() {
         when {
-            sRestartFlags and FLAG_RESTART != 0 -> lawnchairApp.restart(false)
+            sRestartFlags and FLAG_RESTART != 0 -> LawnchairApp.restartCompat(false)
 
             sRestartFlags and FLAG_RECREATE != 0 -> {
                 sRestartFlags = 0
