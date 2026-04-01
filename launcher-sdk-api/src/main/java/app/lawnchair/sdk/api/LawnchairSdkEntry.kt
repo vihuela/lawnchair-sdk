@@ -13,6 +13,9 @@ interface LawnchairSdkEntry {
     val desktopVisibleListener: DesktopVisibleListener?
         get() = null
 
+    val launcherIconClickListener: LauncherIconClickListener?
+        get() = null
+
     val desktopItemProvider: DesktopItemProvider?
         get() = null
 }

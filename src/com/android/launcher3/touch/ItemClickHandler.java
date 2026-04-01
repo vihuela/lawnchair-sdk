@@ -40,6 +40,7 @@ import android.view.View.OnClickListener;
 import android.widget.Toast;
 
 import app.lawnchair.sdk.SdkDesktopItemActionDispatcher;
+import app.lawnchair.sdk.SdkLauncherIconClickDispatcher;
 
 import com.android.launcher3.BubbleTextView;
 import com.android.launcher3.BuildConfig;
@@ -413,6 +414,7 @@ public class ItemClickHandler {
         if (intent == null) {
             throw new IllegalArgumentException("Input must have a valid intent");
         }
+        SdkLauncherIconClickDispatcher.dispatch(launcher, item);
         if (item instanceof WorkspaceItemInfo) {
             WorkspaceItemInfo si = (WorkspaceItemInfo) item;
             if (SdkDesktopItemActionDispatcher.dispatchIfNeeded(launcher, intent)) {

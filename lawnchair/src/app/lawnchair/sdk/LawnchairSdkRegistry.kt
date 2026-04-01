@@ -4,6 +4,7 @@ import app.lawnchair.sdk.api.LawnchairSdkEntry
 import app.lawnchair.sdk.api.DesktopVisibleListener
 import app.lawnchair.sdk.api.DesktopVisibleSource
 import app.lawnchair.sdk.api.DesktopItemProvider
+import app.lawnchair.sdk.api.LauncherIconClickListener
 import app.lawnchair.sdk.api.MinusOneContentProvider
 import app.lawnchair.sdk.api.MinusOneOverlayState
 import app.lawnchair.sdk.api.MinusOneOverlayStateListener
@@ -25,6 +26,9 @@ internal object LawnchairSdkRegistry {
 
     val desktopVisibleListener: DesktopVisibleListener?
         get() = entry.desktopVisibleListener
+
+    val launcherIconClickListener: LauncherIconClickListener?
+        get() = entry.launcherIconClickListener
 
     val hasMinusOneContentProvider: Boolean
         get() = minusOneContentProvider != null
