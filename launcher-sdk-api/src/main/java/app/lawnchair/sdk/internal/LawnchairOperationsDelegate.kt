@@ -10,6 +10,8 @@ interface LawnchairOperationsDelegate {
 
     fun openMinusOneAnimated(context: Context): Boolean
 
+    fun removeDesktopItem(context: Context, itemId: String): Boolean
+
     fun requestSetDefaultLauncher(context: Context)
 
     fun openHomeSettings(context: Context)
@@ -38,6 +40,11 @@ private object NoOpLawnchairOperationsDelegate : LawnchairOperationsDelegate {
 
     override fun openMinusOneAnimated(context: Context): Boolean {
         logUnavailable("openMinusOneAnimated")
+        return false
+    }
+
+    override fun removeDesktopItem(context: Context, itemId: String): Boolean {
+        logUnavailable("removeDesktopItem")
         return false
     }
 

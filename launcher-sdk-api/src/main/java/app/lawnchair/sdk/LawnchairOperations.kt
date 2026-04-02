@@ -27,4 +27,8 @@ object LawnchairOperations {
     fun openLauncherAppInfo(context: Context) {
         LawnchairSdkRuntimeBridge.operationsDelegate.openLauncherAppInfo(context)
     }
+
+    fun removeDesktopItem(context: Context, itemId: String): Boolean {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.removeDesktopItem(context, itemId)
+    }
 }

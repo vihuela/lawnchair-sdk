@@ -35,6 +35,10 @@ internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
         return true
     }
 
+    override fun removeDesktopItem(context: Context, itemId: String): Boolean {
+        return SdkDesktopItemsSynchronizer.removeItem(context, itemId)
+    }
+
     override fun requestSetDefaultLauncher(context: Context) {
         openHomeSettings(context)
     }
