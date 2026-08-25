@@ -3,6 +3,7 @@ package app.lawnchair.sdk
 import android.util.Log
 import app.lawnchair.sdk.api.DesktopItemsExtension
 import app.lawnchair.sdk.api.DesktopItemsSnapshot
+import app.lawnchair.sdk.api.LauncherIconClickInterceptor
 import app.lawnchair.sdk.api.LawnchairSdkEntry
 import app.lawnchair.sdk.api.MinusOneExtension
 
@@ -13,11 +14,16 @@ internal object LawnchairSdkRegistry {
 
     @Volatile private var installedMinusOne: MinusOneExtension? = null
 
+    @Volatile private var installedIconClickInterceptor: LauncherIconClickInterceptor? = null
+
     val desktopItems: DesktopItemsExtension?
         get() = installedDesktopItems
 
     val minusOne: MinusOneExtension?
         get() = installedMinusOne
+
+    val iconClickInterceptor: LauncherIconClickInterceptor?
+        get() = installedIconClickInterceptor
 
     val hasMinusOne: Boolean
         get() = minusOne != null
@@ -28,10 +34,14 @@ internal object LawnchairSdkRegistry {
         installedDesktopItems = desktopItemsResult.getOrNull()
         isDesktopItemsRegistrationHealthy = desktopItemsResult.isSuccess
         installedMinusOne = readEntryProperty("minusOne") { entry.minusOne }
+        installedIconClickInterceptor = readEntryProperty("iconClickInterceptor") {
+            entry.iconClickInterceptor
+        }
         Log.d(
             TAG,
             "Installed SDK entry: desktopItems=${installedDesktopItems != null}, " +
-                "minusOne=${installedMinusOne != null}",
+                "minusOne=${installedMinusOne != null}, " +
+                "iconClickInterceptor=${installedIconClickInterceptor != null}",
         )
     }
 

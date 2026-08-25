@@ -28,7 +28,7 @@ final def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse("app.lawnchair")
 final def sdkPublishVersion = providers.environmentVariable("VERSION")
     .orElse(providers.gradleProperty("PUBLISH_VERSION"))
-    .orElse("0.2.0-local")
+    .orElse("0.2.1-local")
 
 allprojects {
     group = sdkPublishGroup.get()

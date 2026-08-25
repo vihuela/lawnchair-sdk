@@ -24,7 +24,7 @@ Optional custom coordinates:
 ```bash
 ./gradlew \
   -PPUBLISH_GROUP=com.github.vihuela.lawnchair-sdk \
-  -PPUBLISH_VERSION=0.2.0-local \
+  -PPUBLISH_VERSION=0.2.1-local \
   :launcher-sdk-api:publishToMavenLocal \
   :launcher-sdk-runtime:publishToMavenLocal \
   :launcher-core:publishToMavenLocal
@@ -36,8 +36,8 @@ Optional custom coordinates:
 2. Create and push a tag:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 3. Wait for JitPack to finish building the tag.
@@ -45,10 +45,28 @@ git push origin v0.2.0
 Dependency coordinates:
 
 ```text
-com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.2.0
-com.github.vihuela.lawnchair-sdk:launcher-sdk-runtime:v0.2.0
-com.github.vihuela.lawnchair-sdk:launcher-core:v0.2.0
+com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.2.1
+com.github.vihuela.lawnchair-sdk:launcher-sdk-runtime:v0.2.1
+com.github.vihuela.lawnchair-sdk:launcher-core:v0.2.1
 ```
+
+### 图标点击拦截
+
+宿主可在 `LawnchairSdkEntry` 中提供一个可挂起的点击拦截器。回调运行在主线程，可在返回前展示广告等业务 UI；返回 `Proceed` 后 Launcher 会继续执行原有启动或 Provider Action，返回 `Consume` 则终止本次点击：
+
+```kotlin
+class HostSdkEntry : LawnchairSdkEntry {
+    override val iconClickInterceptor = LauncherIconClickInterceptor { request ->
+        val shouldShowAd = request.event.targetPackageName != request.activity.packageName
+        if (shouldShowAd) {
+            adController.showAndAwaitDismiss(request.activity)
+        }
+        LauncherIconClickDecision.Proceed
+    }
+}
+```
+
+`activity` 只在本次回调期间有效，业务侧不应持有。回调异常时 SDK 默认放行原流程；Activity 销毁会取消等待；一次拦截尚未结束时产生的重复点击会被忽略。观察型的 `LauncherEvent.LauncherIconClicked` 仍会在点击发生时立即派发。
 
 Consumer repositories:
 
@@ -68,7 +86,7 @@ dependencyResolutionManagement {
 This section is the migration memo for rebasing this SDK branch onto a newer upstream Lawnchair branch later.
 
 - Upstream baseline before SDK customization: `854f2c036a` (`裁剪系统权限、一般app无关权限`)
-- Current release target: `v0.2.0`
+- Current release target: `v0.2.1`
 - Migration goal: when moving to a new upstream branch, re-apply the capabilities below in order
   instead of rediscovering them from scratch. Play-sensitive removals remain physical deletions and
   are enforced by `launcher-core/play-compliance.gradle`.
@@ -99,6 +117,7 @@ This section is the migration memo for rebasing this SDK branch onto a newer ups
 | 桌面可见事件 | 宿主从 `LawnchairOperations.events` 收集桌面真正进入可见态的事件和来源；事件会在确认可见后延后一拍派发。 | `LauncherContract.kt`, `SdkDesktopVisibilityReporter.kt`, `LawnchairRuntimeSignals.kt` | 如果新 upstream 改了 launcher 生命周期、状态切换或 overlay 手势，优先检查时机判断。 |
 | 负一屏 SDK 化 | Google feed 入口改成本地负一屏，业务侧通过 `MinusOneExtension` 注入 Compose 内容；平台无关 controller 统一处理启动策略、公开操作、返回键和状态派发，状态明确区分 `Closed/Opening/Opened/Closing`。 | `launcher-sdk-runtime/src/main/java/app/lawnchair/sdk/runtime/MinusOneController.kt`, `lawnchair/src/app/lawnchair/sdk/MinusOneCoordinator.kt`, `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneExtension.kt` | 这是和 upstream launcher 行为冲突最高的区域之一，新 upstream 如果又改了 overlay 手势/Workspace 左滑逻辑，只调整 adapter 和 hook，保持 controller contract 不变。 |
 | 桌面业务入口开放 | 业务侧通过 `DesktopItemsSnapshot` 声明完整期望状态；`Ready(emptyList())` 会清空托管图标，`Unavailable` 保留现状。支持显式 `Intent` 和 provider action，稳定 ID、图标版本、批量无重叠落位、拖删 tombstone、Undo 提交和主动刷新/删除/恢复。 | `launcher-sdk-runtime/src/main/java/app/lawnchair/sdk/runtime/DesktopItemsController.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/DesktopItemsExtension.kt`, `lawnchair/src/app/lawnchair/sdk/LauncherWorkspaceAdapter.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemActionDispatcher.kt`, `src/com/android/launcher3/DropTargetHandler.kt` | 稳定 ID 是同步主键；更新图标内容但资源 ID 不变时必须递增 `iconVersion`。迁移时保持 controller 和 API，重写 LauncherModel/DB adapter。 |
+| 图标启动前拦截 | 业务侧通过可挂起的 `LauncherIconClickInterceptor` 展示广告等 UI，并明确返回 `Proceed` 或 `Consume`；controller 处理异常放行、Activity 生命周期取消和重复点击抑制，Launcher3 只保留 continuation hook。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/LauncherIconClick.kt`, `launcher-sdk-runtime/src/main/java/app/lawnchair/sdk/runtime/LauncherIconClickController.kt`, `lawnchair/src/app/lawnchair/sdk/SdkLauncherIconClickDispatcher.kt`, `src/com/android/launcher3/touch/ItemClickHandler.java` | 迁移时只需在新分支的 app icon 最终启动点重新接 continuation；不要把广告或业务逻辑放进 Launcher3。 |
 | 默认桌面与布局定制 | 默认 `default_workspace_4x5` 被定制过，Google 文件夹、设置位置和 Demo 入口都做过调整。 | `lawnchair/res/xml/default_workspace_4x5.xml`, `src/com/android/launcher3/model/WorkspaceItemProcessor.kt`, `src/com/android/launcher3/model/BgDataModel.java` | 这类资源冲突简单，但容易被 upstream 覆盖，迁移后要重新核对默认布局是否符合 SDK 预期。 |
 | 设置页与功能开关裁剪 | 去掉大量和一般宿主 app 无关的设置项与调试入口，例如关于页、实验功能、部分搜索/Quickstep/Google Feed 开关。 | `lawnchair/src/app/lawnchair/ui/preferences/**`, `lawnchair/res/values/strings.xml`, `lawnchair/res/values/config.xml`, `quickstep/src/com/android/launcher3/uioverrides/flags/DevOptionsUiHelper.kt` | 如果新 upstream 设置结构变化大，不必逐文件硬搬，按“只保留 SDK 必需入口”重新裁即可。 |
 | 宿主 `Application` 兼容 | 解决 `includeBuild` 本地源码接入时，宿主 app 不再必须继承 `LawnchairApp`；新增反射初始化和 host runtime，尽量少改原有 `LawnchairApp` 逻辑。 | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairSdkHost.kt`, `lawnchair/src/app/lawnchair/LawnchairHostRuntime.kt`, `lawnchair/src/app/lawnchair/LawnchairApp.kt`, `src/com/android/launcher3/LauncherAppState.java`, `src/com/android/launcher3/model/ModelDbController.java`, `quickstep/src/com/android/launcher3/uioverrides/QuickstepLauncher.java`, `src/com/android/launcher3/dragndrop/DragController.java`, `lawnchair/src/app/lawnchair/util/FileExtensions.kt`, `lawnchair/src/app/lawnchair/util/LawnchairHostInfo.kt`, `launcher-core/consumer-rules.pro` | 这部分是为了让本地源码依赖和远程依赖行为保持一致。新 upstream 迁移时，如果宿主接入再次出现 `LawnchairApp` 强依赖崩溃，优先把这组改动整体带回。 |

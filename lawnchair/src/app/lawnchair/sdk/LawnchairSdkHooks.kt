@@ -1,5 +1,6 @@
 package app.lawnchair.sdk
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import com.android.launcher3.model.data.ItemInfo
@@ -12,8 +13,21 @@ import com.android.launcher3.model.data.ItemInfo
  */
 object LawnchairSdkHooks {
     @JvmStatic
-    fun onItemClick(context: Context, item: ItemInfo, intent: Intent?): Boolean {
-        SdkLauncherIconClickDispatcher.dispatch(context, item)
+    fun onItemClick(
+        activity: Activity,
+        item: ItemInfo,
+        intent: Intent?,
+        continueOriginalFlow: Runnable,
+    ): Boolean {
+        val event = SdkLauncherIconClickDispatcher.createAndDispatchEvent(activity, item)
+        val proceed = Runnable {
+            if (!SdkDesktopItemActionDispatcher.dispatchIfNeeded(intent)) {
+                continueOriginalFlow.run()
+            }
+        }
+        if (SdkLauncherIconClickDispatcher.interceptIfNeeded(activity, event, proceed)) {
+            return true
+        }
         return SdkDesktopItemActionDispatcher.dispatchIfNeeded(intent)
     }
 

@@ -67,6 +67,7 @@ The goal of this fork is to keep Lawnchair’s launcher runtime, but make it eas
 | Refresh, remove, or restore injected desktop icons | `LawnchairOperations.execute(RefreshDesktopItems/RemoveDesktopItem/RestoreDesktopItem)` |
 | Handle injected desktop icon callbacks | `DesktopItemsExtension.onAction()` |
 | Observe launcher icon clicks with current-package classification | `LawnchairOperations.events` / `LauncherEvent.LauncherIconClicked` |
+| Suspend and intercept app icon clicks before the original action | `LawnchairSdkEntry.iconClickInterceptor` / `LauncherIconClickDecision` |
 | Launch desktop / request default launcher / open launcher settings | `app.lawnchair.sdk.LawnchairOperations` |
 | Initialize SDK from a normal host `Application` | `app.lawnchair.sdk.LawnchairSdkHost.initialize()` |
 | Execute typed commands and observe runtime state/events | `LawnchairOperations.execute()`, `LawnchairOperations.state`, `LawnchairOperations.events` |

@@ -412,9 +412,20 @@ public class ItemClickHandler {
         if (intent == null) {
             throw new IllegalArgumentException("Input must have a valid intent");
         }
-        if (LawnchairSdkHooks.onItemClick(launcher, item, intent)) {
+        final Intent resolvedIntent = intent;
+        if (LawnchairSdkHooks.onItemClick(
+                launcher,
+                item,
+                resolvedIntent,
+                () -> continueStartAppShortcutOrInfoActivity(
+                        v, item, launcher, resolvedIntent))) {
             return;
         }
+        continueStartAppShortcutOrInfoActivity(v, item, launcher, resolvedIntent);
+    }
+
+    private static void continueStartAppShortcutOrInfoActivity(
+            View v, ItemInfo item, Launcher launcher, Intent intent) {
         if (item instanceof WorkspaceItemInfo) {
             WorkspaceItemInfo si = (WorkspaceItemInfo) item;
             if (si.hasStatusFlag(WorkspaceItemInfo.FLAG_SUPPORTS_WEB_UI)
