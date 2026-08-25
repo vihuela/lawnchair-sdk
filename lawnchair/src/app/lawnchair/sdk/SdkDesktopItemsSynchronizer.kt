@@ -2,6 +2,7 @@ package app.lawnchair.sdk
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import app.lawnchair.sdk.api.DesktopItemsSnapshot
 import app.lawnchair.sdk.api.LauncherCommandResult
 import app.lawnchair.sdk.runtime.DesktopItemsController
@@ -35,9 +36,20 @@ internal object SdkDesktopItemsSynchronizer {
         return controller(context).restore(itemId)
     }
 
-    fun onLauncherModelReady(context: Context) {
-        if (!workspace(context).isReady) return
-        LawnchairSdkScope.launch { refreshAsync(context) }
+    fun onLauncherStarted(context: Context) {
+        LawnchairSdkScope.launch {
+            when (val result = refreshAsync(context)) {
+                is LauncherCommandResult.Failed -> {
+                    Log.e(TAG, "Automatic desktop item refresh failed: $result")
+                }
+
+                is LauncherCommandResult.Rejected -> {
+                    Log.w(TAG, "Automatic desktop item refresh rejected: $result")
+                }
+
+                else -> Log.d(TAG, "Automatic desktop item refresh completed: $result")
+            }
+        }
     }
 
     fun onUserRemovalCommitted(context: Context, item: ItemInfo?) {
@@ -82,4 +94,6 @@ internal object SdkDesktopItemsSynchronizer {
             return LawnchairSdkRegistry.getDesktopItemsSnapshot()
         }
     }
+
+    private const val TAG = "SdkDesktopItems"
 }

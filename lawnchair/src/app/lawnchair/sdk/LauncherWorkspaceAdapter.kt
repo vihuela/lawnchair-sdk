@@ -25,7 +25,9 @@ import com.android.launcher3.util.Executors
 import com.android.launcher3.util.IntArray
 import java.util.function.Predicate
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Android 15 LauncherModel/DB implementation of the launcher-independent workspace port. */
 internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort {
@@ -33,8 +35,19 @@ internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort
     private val model: LauncherModel
         get() = LauncherAppState.getInstance(appContext).model
 
-    override val isReady: Boolean
-        get() = model.isModelLoaded
+    override suspend fun awaitReady(): Boolean {
+        if (model.isModelLoaded) return true
+
+        // loadAsync's callback can run before a LoaderTask that was already posted has started.
+        // Request a load, then observe LauncherModel's authoritative ready state instead.
+        model.loadAsync {}
+        return withTimeoutOrNull(MODEL_READY_TIMEOUT_MILLIS) {
+            while (!model.isModelLoaded) {
+                delay(MODEL_READY_POLL_INTERVAL_MILLIS)
+            }
+            true
+        } ?: false
+    }
 
     override suspend fun reconcile(
         specs: List<DesktopItemSpec>,
@@ -304,6 +317,9 @@ internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort
     }
 
     private companion object {
+        const val MODEL_READY_TIMEOUT_MILLIS = 10_000L
+        const val MODEL_READY_POLL_INTERVAL_MILLIS = 25L
+
         fun getStableId(intent: Intent?): String? {
             return intent?.getStringExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID)
                 ?.trim()

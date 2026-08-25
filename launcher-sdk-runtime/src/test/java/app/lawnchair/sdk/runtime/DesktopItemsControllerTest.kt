@@ -51,7 +51,19 @@ class DesktopItemsControllerTest {
         val result = fixture.controller.refresh()
 
         assertEquals(rejected(LauncherRejectReason.LauncherNotReady), result)
+        assertEquals(1, fixture.workspace.awaitReadyCalls)
         assertEquals(0, fixture.workspace.reconcileCalls)
+    }
+
+    @Test
+    fun refreshWaitsForLauncherModelBeforeReconciling() = runBlocking {
+        val fixture = fixture(ready = false, readyAfterAwait = true)
+
+        val result = fixture.controller.refresh()
+
+        assertEquals(LauncherCommandResult.DesktopItemsReconciled(0, 0, 0), result)
+        assertEquals(1, fixture.workspace.awaitReadyCalls)
+        assertEquals(1, fixture.workspace.reconcileCalls)
     }
 
     @Test
@@ -172,6 +184,7 @@ class DesktopItemsControllerTest {
         snapshot: DesktopItemsSnapshot = DesktopItemsSnapshot.Ready(listOf(spec("weather"))),
         removedIds: Set<String> = emptySet(),
         ready: Boolean = true,
+        readyAfterAwait: Boolean? = null,
         mutation: DesktopWorkspaceMutation = DesktopWorkspaceMutation(),
         sourceFailure: Throwable? = null,
         storeFailure: Throwable? = null,
@@ -179,7 +192,7 @@ class DesktopItemsControllerTest {
     ): Fixture {
         val source = FakeSource(snapshot, sourceFailure)
         val store = FakeStore(removedIds, storeFailure)
-        val workspace = FakeWorkspace(ready, mutation, workspaceFailure)
+        val workspace = FakeWorkspace(ready, readyAfterAwait, mutation, workspaceFailure)
         return Fixture(DesktopItemsController(source, store, workspace), store, workspace)
     }
 
@@ -231,15 +244,23 @@ class DesktopItemsControllerTest {
     }
 
     private class FakeWorkspace(
-        override val isReady: Boolean,
+        private var ready: Boolean,
+        private val readyAfterAwait: Boolean?,
         private val mutation: DesktopWorkspaceMutation,
         private val failure: Throwable?,
     ) : DesktopWorkspacePort {
+        var awaitReadyCalls = 0
         var reconcileCalls = 0
         var removeCalls = 0
         var lastSpecs: List<DesktopItemSpec> = emptyList()
         var lastRemovedIds: Set<String> = emptySet()
         var lastRemovedItemId: String? = null
+
+        override suspend fun awaitReady(): Boolean {
+            awaitReadyCalls++
+            readyAfterAwait?.let { ready = it }
+            return ready
+        }
 
         override suspend fun reconcile(
             specs: List<DesktopItemSpec>,

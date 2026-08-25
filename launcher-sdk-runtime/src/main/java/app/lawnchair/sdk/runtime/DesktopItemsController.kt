@@ -17,7 +17,8 @@ interface DesktopRemovalStorePort {
 }
 
 interface DesktopWorkspacePort {
-    val isReady: Boolean
+    /** Waits until the platform workspace model can safely accept mutations. */
+    suspend fun awaitReady(): Boolean
 
     suspend fun reconcile(
         specs: List<DesktopItemSpec>,
@@ -53,7 +54,7 @@ class DesktopItemsController(
         val activeIds = specs.mapTo(linkedSetOf(), DesktopItemSpec::id)
         val removedIds = runCatching { removalStore.prune(activeIds) }
             .getOrElse { return modelFailure(it) }
-        val isWorkspaceReady = runCatching { workspace.isReady }
+        val isWorkspaceReady = runCatching { workspace.awaitReady() }
             .getOrElse { return modelFailure(it) }
         if (!isWorkspaceReady) {
             return LauncherCommandResult.Rejected(LauncherRejectReason.LauncherNotReady)

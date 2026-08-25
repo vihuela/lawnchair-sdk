@@ -28,6 +28,11 @@ internal object LawnchairSdkRegistry {
         installedDesktopItems = desktopItemsResult.getOrNull()
         isDesktopItemsRegistrationHealthy = desktopItemsResult.isSuccess
         installedMinusOne = readEntryProperty("minusOne") { entry.minusOne }
+        Log.d(
+            TAG,
+            "Installed SDK entry: desktopItems=${installedDesktopItems != null}, " +
+                "minusOne=${installedMinusOne != null}",
+        )
     }
 
     suspend fun getDesktopItemsSnapshot(): DesktopItemsSnapshot {

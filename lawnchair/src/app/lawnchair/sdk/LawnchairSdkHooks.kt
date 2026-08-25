@@ -28,7 +28,7 @@ object LawnchairSdkHooks {
     }
 
     @JvmStatic
-    fun onLauncherModelReady(context: Context) {
-        SdkDesktopItemsSynchronizer.onLauncherModelReady(context)
+    fun onLauncherStarted(context: Context) {
+        SdkDesktopItemsSynchronizer.onLauncherStarted(context)
     }
 }

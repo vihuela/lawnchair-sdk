@@ -471,10 +471,8 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     private fun maybeSyncSdkDesktopItems() {
         if (hasSyncedSdkDesktopItems) return
-        val modelLoaded = LauncherAppState.getInstance(this).model.isModelLoaded
-        if (!modelLoaded) return
         hasSyncedSdkDesktopItems = true
-        LawnchairSdkHooks.onLauncherModelReady(this)
+        LawnchairSdkHooks.onLauncherStarted(this)
     }
 
     internal fun getMinusOneCoordinator(): MinusOneCoordinator = minusOneCoordinator
