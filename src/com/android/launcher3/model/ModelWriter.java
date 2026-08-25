@@ -78,6 +78,7 @@ public class ModelWriter {
     // Keep track of delete operations that occur when an Undo option is present; we
     // may not commit.
     private final List<ModelTask> mDeleteRunnables = new ArrayList<>();
+    private final List<Runnable> mDeleteCommitCallbacks = new ArrayList<>();
     private boolean mPreparingToUndo;
     private final CellPosMapper mCellPosMapper;
 
@@ -384,7 +385,17 @@ public class ModelWriter {
                 throw new IllegalStateException("There are still uncommitted delete operations!");
             }
             mDeleteRunnables.clear();
+            mDeleteCommitCallbacks.clear();
             mPreparingToUndo = true;
+        }
+    }
+
+    /** Adds work which is only run when the pending user delete is committed, never on Undo. */
+    public void addDeleteCommitCallback(Runnable callback) {
+        if (mPreparingToUndo) {
+            mDeleteCommitCallbacks.add(callback);
+        } else {
+            callback.run();
         }
     }
 
@@ -407,6 +418,8 @@ public class ModelWriter {
         mPreparingToUndo = false;
         mDeleteRunnables.forEach(ModelTask::executeOnModelThread);
         mDeleteRunnables.clear();
+        mDeleteCommitCallbacks.forEach(Runnable::run);
+        mDeleteCommitCallbacks.clear();
     }
 
     /**
@@ -415,6 +428,7 @@ public class ModelWriter {
     public void abortDelete() {
         mPreparingToUndo = false;
         mDeleteRunnables.clear();
+        mDeleteCommitCallbacks.clear();
         // We do a full reload here instead of just a rebind because Folders change
         // their internal
         // state when dragging an item out, which clobbers the rebind unless we load

@@ -7,8 +7,10 @@ import app.lawnchair.sdk.api.LawnchairSdkEntry
 import app.lawnchair.sdk.api.LawnchairSdkMetadata
 
 internal object LawnchairSdkLoader {
+    @Volatile
     private var isLoaded = false
 
+    @Synchronized
     fun load(context: Context) {
         if (isLoaded) return
         isLoaded = true

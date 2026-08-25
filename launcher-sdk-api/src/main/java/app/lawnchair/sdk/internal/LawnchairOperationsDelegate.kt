@@ -2,15 +2,32 @@ package app.lawnchair.sdk.internal
 
 import android.content.Context
 import android.util.Log
+import app.lawnchair.sdk.api.LawnchairOperationResult
+import app.lawnchair.sdk.api.MinusOneAnimation
+import app.lawnchair.sdk.api.MinusOneState
 
 interface LawnchairOperationsDelegate {
     fun isDefaultLauncher(context: Context): Boolean
 
     fun launchDesktop(context: Context)
 
-    fun openMinusOneAnimated(context: Context): Boolean
+    fun getMinusOneState(): MinusOneState?
 
-    fun removeDesktopItem(context: Context, itemId: String): Boolean
+    fun openMinusOne(context: Context, animation: MinusOneAnimation): LawnchairOperationResult
+
+    fun closeMinusOne(context: Context, animation: MinusOneAnimation): LawnchairOperationResult
+
+    fun toggleMinusOne(context: Context, animation: MinusOneAnimation): LawnchairOperationResult
+
+    fun refreshDesktopItems(context: Context): LawnchairOperationResult
+
+    fun removeDesktopItem(
+        context: Context,
+        itemId: String,
+        rememberRemoval: Boolean,
+    ): LawnchairOperationResult
+
+    fun restoreDesktopItem(context: Context, itemId: String): LawnchairOperationResult
 
     fun requestSetDefaultLauncher(context: Context)
 
@@ -38,14 +55,46 @@ private object NoOpLawnchairOperationsDelegate : LawnchairOperationsDelegate {
         logUnavailable("launchDesktop")
     }
 
-    override fun openMinusOneAnimated(context: Context): Boolean {
-        logUnavailable("openMinusOneAnimated")
-        return false
+    override fun getMinusOneState(): MinusOneState? = null
+
+    override fun openMinusOne(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): LawnchairOperationResult {
+        return unavailable("openMinusOne")
     }
 
-    override fun removeDesktopItem(context: Context, itemId: String): Boolean {
-        logUnavailable("removeDesktopItem")
-        return false
+    override fun closeMinusOne(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): LawnchairOperationResult {
+        return unavailable("closeMinusOne")
+    }
+
+    override fun toggleMinusOne(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): LawnchairOperationResult {
+        return unavailable("toggleMinusOne")
+    }
+
+    override fun refreshDesktopItems(context: Context): LawnchairOperationResult {
+        return unavailable("refreshDesktopItems")
+    }
+
+    override fun removeDesktopItem(
+        context: Context,
+        itemId: String,
+        rememberRemoval: Boolean,
+    ): LawnchairOperationResult {
+        return unavailable("removeDesktopItem")
+    }
+
+    override fun restoreDesktopItem(
+        context: Context,
+        itemId: String,
+    ): LawnchairOperationResult {
+        return unavailable("restoreDesktopItem")
     }
 
     override fun requestSetDefaultLauncher(context: Context) {
@@ -62,6 +111,11 @@ private object NoOpLawnchairOperationsDelegate : LawnchairOperationsDelegate {
 
     private fun logUnavailable(operationName: String) {
         Log.w(TAG, "Ignoring $operationName because launcher runtime is not installed")
+    }
+
+    private fun unavailable(operationName: String): LawnchairOperationResult {
+        logUnavailable(operationName)
+        return LawnchairOperationResult.RuntimeUnavailable
     }
 
     private const val TAG = "LawnchairOperations"

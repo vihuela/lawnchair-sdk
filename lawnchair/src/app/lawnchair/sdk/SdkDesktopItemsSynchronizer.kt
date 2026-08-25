@@ -3,11 +3,11 @@ package app.lawnchair.sdk
 import android.content.Context
 import android.content.Intent
 import android.os.Process
-import app.lawnchair.sdk.api.DesktopItemClickAction
-import app.lawnchair.sdk.api.DesktopItemConflictPolicy
-import app.lawnchair.sdk.api.DesktopItemPlacement
+import android.util.Log
 import app.lawnchair.sdk.api.DesktopItemRowAnchor
 import app.lawnchair.sdk.api.DesktopItemSpec
+import app.lawnchair.sdk.api.DesktopItemsSnapshot
+import app.lawnchair.sdk.api.LawnchairOperationResult
 import com.android.launcher3.LauncherAppState
 import com.android.launcher3.LauncherModel
 import com.android.launcher3.LauncherSettings
@@ -20,217 +20,106 @@ import com.android.launcher3.model.ModelDbController
 import com.android.launcher3.model.ModelTaskController
 import com.android.launcher3.model.data.ItemInfo
 import com.android.launcher3.model.data.WorkspaceItemInfo
-import java.util.function.Predicate
-import com.android.launcher3.util.GridOccupancy
+import com.android.launcher3.util.Executors
 import com.android.launcher3.util.IntArray
-import java.security.MessageDigest
+import java.util.function.Predicate
 
 internal object SdkDesktopItemsSynchronizer {
-    fun sync(context: Context) {
-        val provider = LawnchairSdkRegistry.desktopItemProvider ?: run {
-            pruneRemovedItemIds(context, emptySet())
-            return
+    fun refresh(context: Context): LawnchairOperationResult {
+        val appContext = context.applicationContext
+        val snapshot = LawnchairSdkRegistry.getDesktopItemsSnapshot(appContext)
+        if (snapshot is DesktopItemsSnapshot.Unavailable) {
+            return LawnchairOperationResult.DataUnavailable
         }
-        val items = provider.provideDesktopItems(context)
-            .map(::resolveSpec)
-            .filter(::isValidSpec)
-        val activeIds = items.mapTo(linkedSetOf()) { it.stableId }
-        pruneRemovedItemIds(context, activeIds)
-        if (items.isEmpty()) return
-
-        val visibleItems = items.filterNot { it.stableId in getRemovedItemIds(context) }
-        if (visibleItems.isEmpty()) return
-
-        LauncherAppState.getInstance(context)
-            .model
-            .enqueueModelUpdateTask(SyncSdkDesktopItemsTask(visibleItems))
+        val declaredItems = (snapshot as DesktopItemsSnapshot.Ready).items
+        val specs = DesktopItemSpecs.normalize(declaredItems)
+        if (specs.size != declaredItems.size) {
+            Log.w(TAG, "Ignored ${declaredItems.size - specs.size} invalid or duplicate desktop items")
+        }
+        val activeIds = specs.mapTo(linkedSetOf(), DesktopItemSpec::id)
+        val removedIds = pruneAndGetRemovedItemIds(appContext, activeIds)
+        val model = LauncherAppState.getInstance(appContext).model
+        if (!model.isModelLoaded) return LawnchairOperationResult.LauncherNotReady
+        model.enqueueModelUpdateTask(ReconcileDesktopItemsTask(specs, removedIds))
+        return LawnchairOperationResult.Accepted
     }
 
-    fun removeItem(context: Context, itemId: String): Boolean {
+    fun removeItem(
+        context: Context,
+        itemId: String,
+        rememberRemoval: Boolean,
+    ): LawnchairOperationResult {
         val stableId = itemId.trim()
-        if (stableId.isBlank()) return false
-
-        markItemRemoved(context, stableId, removed = true)
-        val matchingStableIds = resolveRemovalStableIds(context, stableId)
-
-        val appState = LauncherAppState.getInstance(context)
-        if (appState.model.isModelLoaded) {
-            appState.model.enqueueModelUpdateTask(RemoveSdkDesktopItemTask(stableId, matchingStableIds))
-        } else {
-            deleteRowsFromDatabase(appState.model.modelDbController, matchingStableIds)
-        }
-        return true
+        if (stableId.isBlank()) return LawnchairOperationResult.InvalidItemId
+        val appContext = context.applicationContext
+        if (rememberRemoval) setRemoved(appContext, stableId, removed = true)
+        removeFromModelOrDatabase(appContext, stableId)
+        return LawnchairOperationResult.Accepted
     }
 
-    private fun resolveSpec(spec: DesktopItemSpec): ResolvedDesktopItemSpec {
-        val explicitId = spec.id.trim()
-        val autoStableId = buildAutoStableId(spec)
-        if (explicitId.isNotBlank()) {
-            val legacyStableIds = if (explicitId == autoStableId) {
-                emptySet()
+    fun restoreItem(context: Context, itemId: String): LawnchairOperationResult {
+        val stableId = itemId.trim()
+        if (stableId.isBlank()) return LawnchairOperationResult.InvalidItemId
+        setRemoved(context.applicationContext, stableId, removed = false)
+        return refresh(context)
+    }
+
+    @JvmStatic
+    fun onUserRemovalCommitted(context: Context, item: ItemInfo?) {
+        val stableId = getStableId(item?.intent) ?: return
+        setRemoved(context.applicationContext, stableId, removed = true)
+    }
+
+    private fun removeFromModelOrDatabase(context: Context, stableId: String) {
+        val model = LauncherAppState.getInstance(context).model
+        Executors.MODEL_EXECUTOR.execute {
+            if (model.isModelLoaded) {
+                model.enqueueModelUpdateTask(RemoveDesktopItemTask(stableId))
             } else {
-                setOf(autoStableId)
+                deleteRowsFromDatabase(model.modelDbController, setOf(stableId))
             }
-            return ResolvedDesktopItemSpec(
-                spec = spec,
-                stableId = explicitId,
-                legacyStableIds = legacyStableIds,
-            )
         }
-
-        return ResolvedDesktopItemSpec(
-            spec = spec,
-            stableId = autoStableId,
-        )
     }
 
-    private fun buildAutoStableId(spec: DesktopItemSpec): String {
-        val signature = buildString {
-            when (val action = spec.clickAction) {
-                is DesktopItemClickAction.LaunchIntent -> {
-                    append("intent:")
-                    append(action.intent.toUri(0))
-                }
-                is DesktopItemClickAction.ProviderAction -> {
-                    append("provider:")
-                    append(action.actionId)
-                }
-            }
-            append("|page=").append(spec.placement.page)
-            append("|column=").append(spec.placement.column)
-            append("|row=").append(
-                when (val row = spec.placement.row) {
-                    is DesktopItemRowAnchor.FromTop -> "top:${row.index}"
-                    is DesktopItemRowAnchor.FromBottom -> "bottom:${row.index}"
-                },
-            )
-        }
-        return "auto_${sha256(signature).take(24)}"
-    }
-
-    private fun sha256(value: String): String {
-        return MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray())
-            .joinToString("") { byte -> "%02x".format(byte) }
-    }
-
-    private fun isValidSpec(spec: ResolvedDesktopItemSpec): Boolean {
-        return spec.stableId.isNotBlank() &&
-            spec.spec.title.isNotBlank() &&
-            spec.spec.iconResId != 0 &&
-            spec.spec.placement.page > 0 &&
-            spec.spec.placement.column >= 0 &&
-            when (val row = spec.spec.placement.row) {
-                is DesktopItemRowAnchor.FromTop -> row.index >= 0
-                is DesktopItemRowAnchor.FromBottom -> row.index >= 0
-            }
+    private fun getStableId(intent: Intent?): String? {
+        return intent?.getStringExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID)
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
     }
 
     private fun getRemovedItemIds(context: Context): Set<String> {
-        val ids = context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getStringSet(KEY_REMOVED_ITEM_IDS, emptySet())
-            .orEmpty()
-        return HashSet(ids)
+        return HashSet(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getStringSet(KEY_REMOVED_ITEM_IDS, emptySet()).orEmpty(),
+        )
     }
 
-    private fun resolveRemovalStableIds(
-        context: Context,
-        stableId: String,
-    ): Set<String> {
-        val provider = LawnchairSdkRegistry.desktopItemProvider ?: return setOf(stableId)
-        val resolvedSpec = provider.provideDesktopItems(context)
-            .map(::resolveSpec)
-            .firstOrNull { it.stableId == stableId }
-            ?: return setOf(stableId)
-        return resolvedSpec.allStableIds
-    }
-
-    private fun pruneRemovedItemIds(
-        context: Context,
-        activeIds: Set<String>,
-    ) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val removedIds = prefs.getStringSet(KEY_REMOVED_ITEM_IDS, emptySet()).orEmpty()
-        val retainedIds = removedIds.filterTo(linkedSetOf()) { it in activeIds }
-        if (removedIds.size == retainedIds.size) return
-        prefs.edit().putStringSet(KEY_REMOVED_ITEM_IDS, retainedIds).apply()
-    }
-
-    private fun markItemRemoved(
-        context: Context,
-        stableId: String,
-        removed: Boolean,
-    ) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val nextIds = prefs.getStringSet(KEY_REMOVED_ITEM_IDS, emptySet())
-            .orEmpty()
-            .toMutableSet()
-        val changed = if (removed) nextIds.add(stableId) else nextIds.remove(stableId)
-        if (!changed) return
-        prefs.edit().putStringSet(KEY_REMOVED_ITEM_IDS, nextIds).apply()
-    }
-
-    private fun matchesStableId(
-        intent: Intent?,
-        stableId: String,
-    ): Boolean {
-        return intent?.getStringExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID) == stableId
-    }
-
-    private fun matchesStableId(
-        intent: Intent?,
-        stableIds: Set<String>,
-    ): Boolean {
-        return stableIds.any { stableId -> matchesStableId(intent, stableId) }
-    }
-
-    private fun buildRemovalMatcher(stableIds: Set<String>): Predicate<ItemInfo?> {
-        return Predicate { item ->
-            val workspaceItem = item as? WorkspaceItemInfo ?: return@Predicate false
-            matchesStableId(workspaceItem.intent, stableIds)
-        }
-    }
-
-    private fun findExistingItems(
-        dataModel: BgDataModel,
-        stableId: String,
-    ): List<WorkspaceItemInfo> {
-        return findExistingItems(dataModel, setOf(stableId))
-    }
-
-    private fun findExistingItems(
-        dataModel: BgDataModel,
-        stableIds: Set<String>,
-    ): List<WorkspaceItemInfo> {
-        val matches = ArrayList<WorkspaceItemInfo>()
-        for (item in dataModel.itemsIdMap) {
-            val workspaceItem = item as? WorkspaceItemInfo ?: continue
-            if (matchesStableId(workspaceItem.intent, stableIds)) {
-                matches.add(workspaceItem)
+    private fun pruneAndGetRemovedItemIds(context: Context, activeIds: Set<String>): Set<String> {
+        return synchronized(removedItemsLock) {
+            val current = getRemovedItemIds(context)
+            val retained = current.filterTo(linkedSetOf()) { it in activeIds }
+            if (retained != current) {
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                    .putStringSet(KEY_REMOVED_ITEM_IDS, retained).apply()
             }
+            retained
         }
-        return matches
     }
 
-    private fun queryMatchingRowIds(
-        modelDbController: ModelDbController,
-        stableId: String,
-    ): List<Int> {
-        return queryMatchingRowIds(modelDbController, setOf(stableId))
+    private fun setRemoved(context: Context, stableId: String, removed: Boolean) {
+        synchronized(removedItemsLock) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val next = prefs.getStringSet(KEY_REMOVED_ITEM_IDS, emptySet()).orEmpty().toMutableSet()
+            val changed = if (removed) next.add(stableId) else next.remove(stableId)
+            if (changed) prefs.edit().putStringSet(KEY_REMOVED_ITEM_IDS, next).apply()
+        }
     }
 
-    private fun queryMatchingRowIds(
-        modelDbController: ModelDbController,
-        stableIds: Set<String>,
-    ): List<Int> {
-        val rowIds = ArrayList<Int>()
+    private fun querySdkRows(modelDbController: ModelDbController): List<DatabaseDesktopItem> {
+        val rows = arrayListOf<DatabaseDesktopItem>()
         modelDbController.query(
             LauncherSettings.Favorites.TABLE_NAME,
-            arrayOf(
-                LauncherSettings.Favorites._ID,
-                LauncherSettings.Favorites.INTENT,
-            ),
+            arrayOf(LauncherSettings.Favorites._ID, LauncherSettings.Favorites.INTENT),
             null,
             null,
             null,
@@ -238,207 +127,161 @@ internal object SdkDesktopItemsSynchronizer {
             val idIndex = cursor.getColumnIndexOrThrow(LauncherSettings.Favorites._ID)
             val intentIndex = cursor.getColumnIndexOrThrow(LauncherSettings.Favorites.INTENT)
             while (cursor.moveToNext()) {
-                val intentDescription = cursor.getString(intentIndex) ?: continue
-                val intent = runCatching { Intent.parseUri(intentDescription, 0) }.getOrNull() ?: continue
-                if (matchesStableId(intent, stableIds)) {
-                    rowIds.add(cursor.getInt(idIndex))
-                }
+                val description = cursor.getString(intentIndex) ?: continue
+                val intent = runCatching { Intent.parseUri(description, 0) }.getOrNull() ?: continue
+                if (!intent.hasExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID)) continue
+                rows += DatabaseDesktopItem(cursor.getInt(idIndex), getStableId(intent).orEmpty())
             }
         }
-        return rowIds
+        return rows
     }
 
-    private fun deleteRowsFromDatabase(
-        modelDbController: ModelDbController,
-        stableId: String,
-    ) {
-        deleteRowsFromDatabase(modelDbController, setOf(stableId))
+    private fun deleteRowsFromDatabase(controller: ModelDbController, stableIds: Set<String>) {
+        if (stableIds.isEmpty()) return
+        deleteDatabaseRows(controller, querySdkRows(controller).filter { it.stableId in stableIds }.map { it.rowId })
     }
 
-    private fun deleteRowsFromDatabase(
-        modelDbController: ModelDbController,
-        stableIds: Set<String>,
-    ) {
-        val rowIds = queryMatchingRowIds(modelDbController, stableIds)
+    private fun deleteDatabaseRows(controller: ModelDbController, rowIds: List<Int>) {
         if (rowIds.isEmpty()) return
-
-        val selectionArgs = rowIds.map(Int::toString).toTypedArray()
-        val placeholders = Array(rowIds.size) { "?" }.joinToString(",")
-        modelDbController.delete(
+        val placeholders = List(rowIds.size) { "?" }.joinToString(",")
+        controller.delete(
             LauncherSettings.Favorites.TABLE_NAME,
             "${LauncherSettings.Favorites._ID} IN ($placeholders)",
-            selectionArgs,
+            rowIds.map(Int::toString).toTypedArray(),
         )
     }
 
-    private class RemoveSdkDesktopItemTask(
-        private val stableId: String,
-        private val matchingStableIds: Set<String>,
-    ) : LauncherModel.ModelUpdateTask {
+    private class RemoveDesktopItemTask(private val stableId: String) : LauncherModel.ModelUpdateTask {
         override fun execute(
             taskController: ModelTaskController,
             dataModel: BgDataModel,
             apps: AllAppsList,
         ) {
-            synchronized(dataModel) {
-                taskController.deleteAndBindComponentsRemoved(
-                    buildRemovalMatcher(matchingStableIds),
-                    "remove sdk desktop item $stableId",
-                )
-                deleteRowsFromDatabase(taskController.app.model.modelDbController, matchingStableIds)
-            }
+            val matcher = Predicate<ItemInfo?> { getStableId(it?.intent) == stableId }
+            taskController.deleteAndBindComponentsRemoved(matcher, "remove sdk desktop item $stableId")
+            deleteRowsFromDatabase(taskController.app.model.modelDbController, setOf(stableId))
         }
     }
 
-    private class SyncSdkDesktopItemsTask(
-        private val specs: List<ResolvedDesktopItemSpec>,
+    private class ReconcileDesktopItemsTask(
+        specs: List<DesktopItemSpec>,
+        private val removedIds: Set<String>,
     ) : LauncherModel.ModelUpdateTask {
+        private val specsById = specs.associateBy(DesktopItemSpec::id)
+
         override fun execute(
             taskController: ModelTaskController,
             dataModel: BgDataModel,
             apps: AllAppsList,
         ) {
-            if (specs.isEmpty()) return
-
             val context = taskController.app.context
+            val profile = taskController.app.invariantDeviceProfile
             val modelWriter = taskController.getModelWriter()
-            val updatedItems = ArrayList<ItemInfo>()
-            val addedItems = ArrayList<ItemInfo>()
-            val addedWorkspaceScreens = IntArray()
+            val addedItems = arrayListOf<ItemInfo>()
+            val updatedItems = arrayListOf<ItemInfo>()
+            val addedScreens = IntArray()
 
             synchronized(dataModel) {
-                val workspaceScreens = dataModel.collectWorkspaceScreens()
-                specs.forEach { spec ->
-                    val existingItems = findExistingItems(dataModel, spec.allStableIds)
-                    val existingItem = existingItems.firstOrNull()
-                    val duplicateItems = existingItems.drop(1)
-                    if (duplicateItems.isNotEmpty()) {
-                        modelWriter.deleteItemsFromDatabase(
-                            duplicateItems,
-                            "remove duplicate sdk desktop items for ${spec.stableId}",
-                        )
+                val existingItems = dataModel.itemsIdMap.mapNotNull { item ->
+                    (item as? WorkspaceItemInfo)?.takeIf {
+                        it.intent.hasExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID)
                     }
-                    cleanupOrphanedRows(
-                        taskController = taskController,
-                        stableIds = spec.allStableIds,
-                        keptItemId = existingItem?.id,
+                }
+                val plan = DesktopItemsReconciler.plan(
+                    desiredIds = specsById.keys,
+                    removedIds = removedIds,
+                    existingIds = existingItems.map { getStableId(it.intent).orEmpty() },
+                )
+                val keptItemsById = plan.keptRecordIndexes.associate { index ->
+                    getStableId(existingItems[index].intent).orEmpty() to existingItems[index]
+                }
+                val deletedItemIds = plan.deletedRecordIndexes.mapTo(hashSetOf()) { existingItems[it].id }
+                if (deletedItemIds.isNotEmpty()) {
+                    taskController.deleteAndBindComponentsRemoved(
+                        Predicate { item -> item?.id in deletedItemIds },
+                        "reconcile sdk desktop items",
                     )
+                }
 
-                    if (existingItem == null) {
-                        val screenId = ensureScreenIdForPage(
-                            taskController = taskController,
-                            workspaceScreens = workspaceScreens,
-                            page = spec.spec.placement.page,
-                            addedWorkspaceScreens = addedWorkspaceScreens,
-                        )
-                        val targetCell = resolveCell(
-                            appState = taskController.app,
-                            dataModel = dataModel,
-                            screenId = screenId,
-                            placement = spec.spec.placement,
-                            ignoredItemIds = existingItems.mapTo(hashSetOf()) { it.id },
-                        ) ?: return@forEach
-                        val item = createWorkspaceItem(context, spec)
-                        modelWriter.addItemToDatabase(
-                            item,
-                            LauncherSettings.Favorites.CONTAINER_DESKTOP,
-                            screenId,
-                            targetCell.first,
-                            targetCell.second,
-                        )
-                        addedItems.add(item)
-                    } else {
-                        val contentChanged = updateExistingItem(existingItem, context, spec)
-                        if (contentChanged) {
-                            // Keep the user's current placement after the first insertion.
-                            modelWriter.updateItemInDatabase(existingItem)
-                            updatedItems.add(existingItem)
+                val grids = hashMapOf<Int, DesktopGrid>()
+                fun gridFor(screenId: Int): DesktopGrid = grids.getOrPut(screenId) {
+                    DesktopGrid(profile.numColumns, profile.numRows).also { grid ->
+                        dataModel.itemsIdMap.forEach { item ->
+                            if (item.id !in deletedItemIds &&
+                                item.container == LauncherSettings.Favorites.CONTAINER_DESKTOP &&
+                                item.screenId == screenId
+                            ) {
+                                grid.mark(item.cellX, item.cellY, item.spanX, item.spanY)
+                            }
                         }
                     }
                 }
-            }
 
-            if (addedWorkspaceScreens.isEmpty && addedItems.isEmpty() && updatedItems.isEmpty()) {
-                return
-            }
+                val workspaceScreens = dataModel.collectWorkspaceScreens()
+                specsById.values.forEach { spec ->
+                    if (spec.id in removedIds) return@forEach
+                    val existing = keptItemsById[spec.id]
+                    if (existing != null) {
+                        if (updateExistingItem(existing, context, spec)) {
+                            modelWriter.updateItemInDatabase(existing)
+                            updatedItems += existing
+                        }
+                        return@forEach
+                    }
 
-            taskController.scheduleCallbackTask { callbacks ->
-                if (!addedWorkspaceScreens.isEmpty) {
-                    callbacks.bindAppsAdded(
-                        addedWorkspaceScreens,
-                        arrayListOf<ItemInfo>(),
-                        ArrayList(addedItems),
+                    val desiredRow = when (val row = spec.placement.row) {
+                        is DesktopItemRowAnchor.FromTop -> row.index
+                        is DesktopItemRowAnchor.FromBottom -> profile.numRows - 1 - row.index
+                    }
+                    if (spec.placement.column !in 0 until profile.numColumns ||
+                        desiredRow !in 0 until profile.numRows
+                    ) {
+                        return@forEach
+                    }
+
+                    val screenId = ensureScreenIdForPage(
+                        taskController,
+                        workspaceScreens,
+                        spec.placement.page,
+                        addedScreens,
                     )
+                    val grid = gridFor(screenId)
+                    val cell = grid.resolve(spec.placement) ?: return@forEach
+                    grid.mark(cell.column, cell.row)
+                    val item = createWorkspaceItem(context, spec)
+                    modelWriter.addItemToDatabase(
+                        item,
+                        LauncherSettings.Favorites.CONTAINER_DESKTOP,
+                        screenId,
+                        cell.column,
+                        cell.row,
+                    )
+                    addedItems += item
+                }
+
+                val modelItemIds = dataModel.itemsIdMap.mapTo(hashSetOf()) { it.id }
+                val orphanRows = querySdkRows(taskController.app.model.modelDbController)
+                    .filter { it.rowId !in modelItemIds }
+                    .map(DatabaseDesktopItem::rowId)
+                deleteDatabaseRows(taskController.app.model.modelDbController, orphanRows)
+            }
+
+            if (addedScreens.isEmpty && addedItems.isEmpty() && updatedItems.isEmpty()) return
+            taskController.scheduleCallbackTask { callbacks ->
+                if (!addedScreens.isEmpty) {
+                    callbacks.bindAppsAdded(addedScreens, arrayListOf<ItemInfo>(), ArrayList(addedItems))
                 } else if (addedItems.isNotEmpty()) {
                     callbacks.bindItems(addedItems, true)
                 }
-                if (updatedItems.isNotEmpty()) {
-                    callbacks.bindItemsModified(updatedItems)
-                }
+                if (updatedItems.isNotEmpty()) callbacks.bindItemsModified(updatedItems)
             }
-        }
-
-        private fun findExistingItems(
-            dataModel: BgDataModel,
-            specId: String,
-        ): List<WorkspaceItemInfo> {
-            val matches = ArrayList<WorkspaceItemInfo>()
-            for (item in dataModel.itemsIdMap) {
-                val workspaceItem = item as? WorkspaceItemInfo ?: continue
-                if (matchesStableId(workspaceItem.intent, specId)) {
-                    matches.add(workspaceItem)
-                }
-            }
-            return matches
-        }
-
-        private fun cleanupOrphanedRows(
-            taskController: ModelTaskController,
-            stableIds: Set<String>,
-            keptItemId: Int?,
-        ) {
-            val staleRowIds = ArrayList<Int>()
-            taskController.app.model.modelDbController.query(
-                LauncherSettings.Favorites.TABLE_NAME,
-                arrayOf(
-                    LauncherSettings.Favorites._ID,
-                    LauncherSettings.Favorites.INTENT,
-                ),
-                null,
-                null,
-                null,
-            ).use { cursor ->
-                val idIndex = cursor.getColumnIndexOrThrow(LauncherSettings.Favorites._ID)
-                val intentIndex = cursor.getColumnIndexOrThrow(LauncherSettings.Favorites.INTENT)
-                while (cursor.moveToNext()) {
-                    val intentDescription = cursor.getString(intentIndex) ?: continue
-                    val intent = runCatching { Intent.parseUri(intentDescription, 0) }.getOrNull() ?: continue
-                    if (!matchesStableId(intent, stableIds)) {
-                        continue
-                    }
-                    val rowId = cursor.getInt(idIndex)
-                    if (rowId != keptItemId) {
-                        staleRowIds.add(rowId)
-                    }
-                }
-            }
-
-            if (staleRowIds.isEmpty()) return
-
-            val selectionArgs = staleRowIds.map(Int::toString).toTypedArray()
-            val placeholders = Array(staleRowIds.size) { "?" }.joinToString(",")
-            taskController.app.model.modelDbController.delete(
-                LauncherSettings.Favorites.TABLE_NAME,
-                "${LauncherSettings.Favorites._ID} IN ($placeholders)",
-                selectionArgs,
-            )
         }
 
         private fun ensureScreenIdForPage(
             taskController: ModelTaskController,
             workspaceScreens: IntArray,
             page: Int,
-            addedWorkspaceScreens: IntArray,
+            addedScreens: IntArray,
         ): Int {
             if (page == 1) {
                 if (!workspaceScreens.contains(WorkspaceLayoutManager.FIRST_SCREEN_ID)) {
@@ -446,126 +289,59 @@ internal object SdkDesktopItemsSynchronizer {
                 }
                 return WorkspaceLayoutManager.FIRST_SCREEN_ID
             }
-
-            val targetIndex = page - 1
-            while (workspaceScreens.size() <= targetIndex) {
-                val newScreenId = taskController.app.model.modelDbController.getNewScreenId()
-                workspaceScreens.add(newScreenId)
-                addedWorkspaceScreens.add(newScreenId)
+            val index = page - 1
+            while (workspaceScreens.size() <= index) {
+                val screenId = taskController.app.model.modelDbController.getNewScreenId()
+                workspaceScreens.add(screenId)
+                addedScreens.add(screenId)
             }
-            return workspaceScreens.get(targetIndex)
+            return workspaceScreens.get(index)
         }
 
-        private fun resolveCell(
-            appState: LauncherAppState,
-            dataModel: BgDataModel,
-            screenId: Int,
-            placement: DesktopItemPlacement,
-            ignoredItemIds: Set<Int>,
-        ): Pair<Int, Int>? {
-            val profile = appState.invariantDeviceProfile
-            val desiredRow = when (val row = placement.row) {
-                is DesktopItemRowAnchor.FromTop -> row.index
-                is DesktopItemRowAnchor.FromBottom -> profile.numRows - 1 - row.index
-            }
-            if (desiredRow !in 0 until profile.numRows || placement.column !in 0 until profile.numColumns) {
-                return null
-            }
-
-            val occupied = GridOccupancy(profile.numColumns, profile.numRows)
-            for (item in dataModel.itemsIdMap) {
-                if (item.id in ignoredItemIds) continue
-                if (item.container == LauncherSettings.Favorites.CONTAINER_DESKTOP && item.screenId == screenId) {
-                    occupied.markCells(item, true)
-                }
-            }
-
-            if (occupied.isRegionVacant(placement.column, desiredRow, 1, 1)) {
-                return placement.column to desiredRow
-            }
-            if (placement.conflictPolicy == DesktopItemConflictPolicy.Skip) {
-                return null
-            }
-
-            val rowRange = when (placement.row) {
-                is DesktopItemRowAnchor.FromBottom -> desiredRow downTo 0
-                is DesktopItemRowAnchor.FromTop -> desiredRow until profile.numRows
-            }
-            for (row in rowRange) {
-                for (column in placement.column until profile.numColumns) {
-                    if (occupied.isRegionVacant(column, row, 1, 1)) {
-                        return column to row
-                    }
-                }
-                for (column in 0 until placement.column) {
-                    if (occupied.isRegionVacant(column, row, 1, 1)) {
-                        return column to row
-                    }
-                }
-            }
-            return null
-        }
-
-        private fun createWorkspaceItem(
-            context: Context,
-            spec: ResolvedDesktopItemSpec,
-        ): WorkspaceItemInfo {
-            return WorkspaceItemInfo().apply {
-                user = Process.myUserHandle()
-                itemType = LauncherSettings.Favorites.ITEM_TYPE_SEARCH_ACTION
-                title = spec.spec.title
-                contentDescription = spec.spec.title
-                intent = buildPersistedIntent(context, spec)
-                bitmap = loadIcon(context, spec.spec.iconResId)
-            }
+        private fun createWorkspaceItem(context: Context, spec: DesktopItemSpec) = WorkspaceItemInfo().apply {
+            user = Process.myUserHandle()
+            itemType = LauncherSettings.Favorites.ITEM_TYPE_SEARCH_ACTION
+            title = spec.title
+            contentDescription = spec.title
+            intent = SdkDesktopItemActionDispatcher.createPersistedIntent(context, spec, spec.id)
+            bitmap = loadIcon(context, spec.iconResId)
         }
 
         private fun updateExistingItem(
             item: WorkspaceItemInfo,
             context: Context,
-            spec: ResolvedDesktopItemSpec,
+            spec: DesktopItemSpec,
         ): Boolean {
             var changed = false
-            val currentIntent = item.intent
-            val existingIconResId =
-                currentIntent.getIntExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ICON_RES_ID, -1)
-            if (item.title != spec.spec.title) {
-                item.title = spec.spec.title
-                item.contentDescription = spec.spec.title
+            val oldIntent = item.intent
+            if (item.title != spec.title) {
+                item.title = spec.title
+                item.contentDescription = spec.title
                 changed = true
             }
-
-            val newIntent = buildPersistedIntent(context, spec)
-            if (currentIntent.toUri(0) != newIntent.toUri(0)) {
+            val newIntent = SdkDesktopItemActionDispatcher.createPersistedIntent(context, spec, spec.id)
+            if (oldIntent.toUri(0) != newIntent.toUri(0)) {
                 item.intent = newIntent
                 changed = true
             }
-
-            if (existingIconResId != spec.spec.iconResId) {
-                item.bitmap = loadIcon(context, spec.spec.iconResId)
+            val oldIconRes = oldIntent.getIntExtra(
+                SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ICON_RES_ID,
+                -1,
+            )
+            val oldIconVersion = oldIntent.getStringExtra(
+                SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ICON_VERSION,
+            ).orEmpty()
+            if (oldIconRes != spec.iconResId || oldIconVersion != spec.iconVersion) {
+                item.bitmap = loadIcon(context, spec.iconResId)
                 changed = true
             }
             return changed
         }
 
-        private fun buildPersistedIntent(
-            context: Context,
-            spec: ResolvedDesktopItemSpec,
-        ): Intent {
-            return SdkDesktopItemActionDispatcher.createPersistedIntent(
-                context = context,
-                spec = spec.spec,
-                stableId = spec.stableId,
-            )
-        }
-
-        private fun loadIcon(
-            context: Context,
-            iconResId: Int,
-        ) = runCatching {
+        private fun loadIcon(context: Context, iconResId: Int) = runCatching {
             val drawable = checkNotNull(context.getDrawable(iconResId))
-            LauncherIcons.obtain(context).use { launcherIcons ->
-                launcherIcons.createBadgedIconBitmap(
+            LauncherIcons.obtain(context).use { icons ->
+                icons.createBadgedIconBitmap(
                     drawable,
                     BaseIconFactory.IconOptions().setUser(Process.myUserHandle()),
                 )
@@ -575,18 +351,10 @@ internal object SdkDesktopItemsSynchronizer {
         }
     }
 
-    private data class ResolvedDesktopItemSpec(
-        val spec: DesktopItemSpec,
-        val stableId: String,
-        val legacyStableIds: Set<String> = emptySet(),
-    ) {
-        val allStableIds: Set<String>
-            get() = linkedSetOf<String>().apply {
-                add(stableId)
-                addAll(legacyStableIds)
-            }
-    }
+    private data class DatabaseDesktopItem(val rowId: Int, val stableId: String)
 
     private const val PREFS_NAME = "lawnchair_sdk_desktop_items"
     private const val KEY_REMOVED_ITEM_IDS = "removed_item_ids"
+    private const val TAG = "SdkDesktopItems"
+    private val removedItemsLock = Any()
 }

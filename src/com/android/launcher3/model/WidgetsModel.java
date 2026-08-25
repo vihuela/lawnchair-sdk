@@ -23,7 +23,6 @@ import androidx.annotation.Nullable;
 import androidx.collection.ArrayMap;
 
 import com.android.launcher3.AppFilter;
-import com.android.launcher3.BuildConfig;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.Utilities;
@@ -348,11 +347,13 @@ public class WidgetsModel {
 
         private final InvariantDeviceProfile mIdp;
         private final AppFilter mAppFilter;
+        private final String mHostPackageName;
         private PreferenceManager2 prefs;
 
         WidgetValidityCheck(LauncherAppState app) {
             mIdp = app.getInvariantDeviceProfile();
             mAppFilter = new AppFilter(app.getContext());
+            mHostPackageName = app.getContext().getPackageName();
             prefs = PreferenceManager2.getInstance(app.getContext());
         }
 
@@ -360,7 +361,7 @@ public class WidgetsModel {
         public boolean test(WidgetItem item) {
             if (item.widgetInfo != null) {
                 if ((item.widgetInfo.getWidgetFeatures() & WIDGET_FEATURE_HIDE_FROM_PICKER) != 0) {
-                    boolean isSelf = item.componentName.getPackageName().equals(BuildConfig.APPLICATION_ID);
+                    boolean isSelf = item.componentName.getPackageName().equals(mHostPackageName);
                     if (!isSelf) {
                         // Widget is hidden from picker
                         return false;

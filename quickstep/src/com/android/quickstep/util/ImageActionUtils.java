@@ -51,7 +51,6 @@ import androidx.core.content.FileProvider;
 
 import com.android.internal.app.ChooserActivity;
 import com.android.internal.util.ScreenshotRequest;
-import com.android.launcher3.BuildConfig;
 import com.android.quickstep.SystemUiProxy;
 import com.android.systemui.shared.recents.model.Task;
 import java.io.File;
@@ -68,7 +67,6 @@ import app.lawnchair.compatlib.utils.BitmapUtil;
  */
 public class ImageActionUtils {
 
-    private static final String AUTHORITY = BuildConfig.APPLICATION_ID + ".overview.fileprovider";
     private static final long FILE_LIFE = 1000L /*ms*/ * 60L /*s*/ * 60L /*m*/ * 24L /*h*/;
     private static final String SUB_FOLDER = "Overview";
     private static final String BASE_NAME = "overview_image_";
@@ -268,7 +266,8 @@ public class ImageActionUtils {
             Log.e(tag, "Error saving image", e);
         }
 
-        return FileProvider.getUriForFile(context, AUTHORITY, file);
+        return FileProvider.getUriForFile(
+                context, context.getPackageName() + ".overview.fileprovider", file);
     }
 
     /**

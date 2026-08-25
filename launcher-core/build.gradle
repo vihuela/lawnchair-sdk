@@ -42,7 +42,6 @@ android {
         buildConfigField "String", "COMMIT_HASH", "\"${launcherCommitHash}\""
         buildConfigField "int", "QUICKSTEP_MIN_SDK", "${launcherMinSdk}"
         buildConfigField "int", "QUICKSTEP_MAX_SDK", "${launcherTargetSdk}"
-        resValue "string", "launcher_component", "app.lawnchair/app.lawnchair.LawnchairLauncher"
         consumerProguardFiles "consumer-rules.pro"
     }
 
@@ -208,6 +207,8 @@ dependencies {
     implementation libs.androidx.palette.ktx
     implementation libs.androidx.slice.core
     implementation libs.bundles.accompanist
+
+    testImplementation "junit:junit:4.13.2"
     implementation libs.google.material
     implementation libs.material.motion.compose
     implementation libs.kdrag0n.colorkt

@@ -63,7 +63,6 @@ import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.app.animation.Interpolators;
-import com.android.launcher3.BuildConfig;
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.Flags;
 import com.android.launcher3.R;
@@ -262,7 +261,7 @@ public class PrivateProfileManager extends UserProfileManager {
         UserHandle profileUser = getProfileUser();
         if (profileUser != null) {
             mAppInstallerIntent = apiWrapper
-                    .getAppMarketActivityIntent(BuildConfig.APPLICATION_ID, profileUser);
+                    .getAppMarketActivityIntent(appContext.getPackageName(), profileUser);
         }
         setPrivateSpaceSettingsAvailable(apiWrapper.getPrivateSpaceSettingsIntent() != null);
     }

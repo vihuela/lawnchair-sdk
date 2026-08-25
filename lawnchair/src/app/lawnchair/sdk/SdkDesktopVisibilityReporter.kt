@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.core.view.OneShotPreDrawListener
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.sdk.api.DesktopVisibleSource
-import app.lawnchair.sdk.api.MinusOneOverlayState
+import app.lawnchair.sdk.api.MinusOnePhase
 import com.android.launcher3.BaseActivity
 import com.android.launcher3.LauncherState
 import com.android.launcher3.statemanager.StateManager
@@ -78,16 +78,17 @@ internal class SdkDesktopVisibilityReporter(
         maybeDispatchDesktopVisible()
     }
 
-    fun onMinusOneStateChanged(state: MinusOneOverlayState) {
+    fun onMinusOneStateChanged(state: MinusOnePhase) {
         val wasVisibleOrPending = isMinusOneVisibleOrPending
         when (state) {
-            MinusOneOverlayState.Opened,
-            MinusOneOverlayState.Sliding,
+            MinusOnePhase.Opened,
+            MinusOnePhase.Opening,
+            MinusOnePhase.Closing,
             -> {
                 isMinusOneVisibleOrPending = true
             }
 
-            MinusOneOverlayState.Closed -> {
+            MinusOnePhase.Closed -> {
                 isMinusOneVisibleOrPending = false
                 if (wasVisibleOrPending) {
                     setPendingSource(DesktopVisibleSource.MinusOneReturn)
@@ -189,6 +190,7 @@ internal class SdkDesktopVisibilityReporter(
     private val DesktopVisibleSource.priority: Int
         get() = when (this) {
             DesktopVisibleSource.ColdStart -> 1
+
             DesktopVisibleSource.MinusOneReturn,
             DesktopVisibleSource.AllAppsReturn,
             DesktopVisibleSource.OtherUiReturn,

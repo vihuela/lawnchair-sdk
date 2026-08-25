@@ -18,8 +18,11 @@ import app.lawnchair.preferences2.PreferenceManager2;
 public class AppFilter {
 
     private final Set<ComponentName> mFilteredComponents;
+    private final ComponentName mHostLauncherComponent;
 
     public AppFilter(Context context) {
+        mHostLauncherComponent = new ComponentName(
+                context.getPackageName(), "app.lawnchair.LawnchairLauncher");
         mFilteredComponents = Arrays.stream(
                 context.getResources().getStringArray(R.array.filtered_components))
                 .map(ComponentName::unflattenFromString)
@@ -27,6 +30,6 @@ public class AppFilter {
     }
 
     public boolean shouldShowApp(ComponentName app) {
-        return !mFilteredComponents.contains(app);
+        return !mHostLauncherComponent.equals(app) && !mFilteredComponents.contains(app);
     }
 }

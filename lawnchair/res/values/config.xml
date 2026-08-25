@@ -54,8 +54,6 @@
         <item>com.google.android.launcher/.StubApp</item>
         <!-- Action Services -->
         <item>com.google.android.as/com.google.android.apps.miphone.aiai.allapps.main.MainDummyActivity</item>
-        <!-- Lawnchair -->
-        <item>@string/launcher_component</item>
     </string-array>
 
     <dimen name="page_indicator_dot_size_v2">6dp</dimen>

@@ -4,22 +4,33 @@ import android.content.Context
 import android.content.Intent
 import androidx.annotation.DrawableRes
 
-interface DesktopItemProvider {
-    fun provideDesktopItems(context: Context): List<DesktopItemSpec> = emptyList()
+interface DesktopItemsExtension {
+    /**
+     * Returns the complete desired desktop state. [DesktopItemsSnapshot.Unavailable] keeps the
+     * last applied state unchanged and should be used while data is loading or temporarily failed.
+     */
+    fun getSnapshot(context: Context): DesktopItemsSnapshot
 
-    fun onDesktopItemAction(
+    fun onAction(
         context: Context,
         itemId: String,
         actionId: String,
-    ): Boolean = false
+    ) = Unit
+}
+
+sealed interface DesktopItemsSnapshot {
+    data class Ready(val items: List<DesktopItemSpec>) : DesktopItemsSnapshot
+
+    data object Unavailable : DesktopItemsSnapshot
 }
 
 data class DesktopItemSpec(
+    val id: String,
     val title: String,
-    @DrawableRes val iconResId: Int,
+    @param:DrawableRes val iconResId: Int,
     val clickAction: DesktopItemClickAction,
     val placement: DesktopItemPlacement,
-    val id: String = "",
+    val iconVersion: String = "",
     val allowDragToDelete: Boolean = true,
 )
 

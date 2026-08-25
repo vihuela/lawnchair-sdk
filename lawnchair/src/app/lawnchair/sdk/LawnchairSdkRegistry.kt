@@ -1,49 +1,73 @@
 package app.lawnchair.sdk
 
-import app.lawnchair.sdk.api.LawnchairSdkEntry
+import android.content.Context
+import android.util.Log
+import app.lawnchair.sdk.api.DesktopItemsExtension
+import app.lawnchair.sdk.api.DesktopItemsSnapshot
 import app.lawnchair.sdk.api.DesktopVisibleListener
 import app.lawnchair.sdk.api.DesktopVisibleSource
-import app.lawnchair.sdk.api.DesktopItemProvider
 import app.lawnchair.sdk.api.LauncherIconClickListener
-import app.lawnchair.sdk.api.MinusOneContentProvider
-import app.lawnchair.sdk.api.MinusOneOverlayState
-import app.lawnchair.sdk.api.MinusOneOverlayStateListener
+import app.lawnchair.sdk.api.LawnchairSdkEntry
+import app.lawnchair.sdk.api.MinusOneExtension
+import app.lawnchair.sdk.api.MinusOneState
 
 internal object LawnchairSdkRegistry {
-    private var entry: LawnchairSdkEntry = EmptyLawnchairSdkEntry
+    @Volatile private var installedDesktopItems: DesktopItemsExtension? = null
 
-    val desktopItemProvider: DesktopItemProvider?
-        get() = entry.desktopItemProvider
+    @Volatile private var installedMinusOne: MinusOneExtension? = null
 
-    val minusOneContentProvider: MinusOneContentProvider?
-        get() = entry.minusOneContentProvider
+    @Volatile private var installedDesktopVisibleListener: DesktopVisibleListener? = null
 
-    val openMinusOneOnLauncherLaunch: Boolean
-        get() = hasMinusOneContentProvider && entry.openMinusOneOnLauncherLaunch
+    @Volatile private var installedLauncherIconClickListener: LauncherIconClickListener? = null
 
-    val minusOneOverlayStateListener: MinusOneOverlayStateListener?
-        get() = entry.minusOneOverlayStateListener
+    val desktopItems: DesktopItemsExtension?
+        get() = installedDesktopItems
+
+    val minusOne: MinusOneExtension?
+        get() = installedMinusOne
 
     val desktopVisibleListener: DesktopVisibleListener?
-        get() = entry.desktopVisibleListener
+        get() = installedDesktopVisibleListener
 
     val launcherIconClickListener: LauncherIconClickListener?
-        get() = entry.launcherIconClickListener
+        get() = installedLauncherIconClickListener
 
-    val hasMinusOneContentProvider: Boolean
-        get() = minusOneContentProvider != null
+    val hasMinusOne: Boolean
+        get() = minusOne != null
 
     fun install(entry: LawnchairSdkEntry) {
-        this.entry = entry
+        installedDesktopItems = readEntryProperty("desktopItems") { entry.desktopItems }
+        installedMinusOne = readEntryProperty("minusOne") { entry.minusOne }
+        installedDesktopVisibleListener = readEntryProperty("desktopVisibleListener") {
+            entry.desktopVisibleListener
+        }
+        installedLauncherIconClickListener = readEntryProperty("launcherIconClickListener") {
+            entry.launcherIconClickListener
+        }
     }
 
-    fun dispatchMinusOneOverlayState(state: MinusOneOverlayState, progress: Float) {
-        minusOneOverlayStateListener?.onStateChanged(state, progress)
+    fun getDesktopItemsSnapshot(context: Context): DesktopItemsSnapshot {
+        val extension = desktopItems ?: return DesktopItemsSnapshot.Ready(emptyList())
+        return runCatching { extension.getSnapshot(context) }
+            .onFailure { Log.e(TAG, "Desktop item snapshot callback failed", it) }
+            .getOrDefault(DesktopItemsSnapshot.Unavailable)
+    }
+
+    fun dispatchMinusOneState(state: MinusOneState) {
+        runCatching { minusOne?.onStateChanged(state) }
+            .onFailure { Log.e(TAG, "Minus-one state callback failed", it) }
     }
 
     fun dispatchDesktopVisible(source: DesktopVisibleSource) {
-        desktopVisibleListener?.onDesktopVisible(source)
+        runCatching { desktopVisibleListener?.onDesktopVisible(source) }
+            .onFailure { Log.e(TAG, "Desktop visibility callback failed", it) }
     }
-}
 
-private object EmptyLawnchairSdkEntry : LawnchairSdkEntry
+    private fun <T> readEntryProperty(name: String, block: () -> T?): T? {
+        return runCatching(block)
+            .onFailure { Log.e(TAG, "SDK entry property '$name' failed", it) }
+            .getOrNull()
+    }
+
+    private const val TAG = "LawnchairSdkRegistry"
+}

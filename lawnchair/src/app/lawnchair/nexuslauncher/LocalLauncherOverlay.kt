@@ -1,5 +1,7 @@
 package app.lawnchair.nexuslauncher
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.os.Bundle
@@ -7,18 +9,12 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import app.lawnchair.LawnchairLauncher
-import app.lawnchair.sdk.LawnchairSdkRegistry
-import app.lawnchair.sdk.api.MinusOneOverlayState
-import app.lawnchair.ui.theme.LawnchairTheme
+import app.lawnchair.sdk.MinusOneGeometry
+import app.lawnchair.sdk.MinusOneProgressStateMachine
+import app.lawnchair.sdk.api.MinusOneState
 import com.android.launcher3.InsettableFrameLayout
 import com.android.launcher3.R
 import com.android.launcher3.Utilities
@@ -26,8 +22,11 @@ import com.android.systemui.plugins.shared.LauncherOverlayManager
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlay
 import com.android.systemui.plugins.shared.LauncherOverlayManager.LauncherOverlayCallbacks
 
-class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
-    LauncherOverlay,
+class LocalLauncherOverlay(
+    private val launcher: LawnchairLauncher,
+    private val content: @Composable (Modifier) -> Unit,
+    private val onStateChanged: (MinusOneState) -> Unit,
+) : LauncherOverlay,
     LauncherOverlayManager {
 
     private var overlayContainer: FrameLayout? = null
@@ -39,7 +38,7 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     private var isAdded = false
     private var isEnabled = true
     private var screenWidth = 0
-    private var lastReportedOverlayState: MinusOneOverlayState? = null
+    private val stateMachine = MinusOneProgressStateMachine()
 
     private var touchDownX = 0f
     private var touchDownY = 0f
@@ -193,8 +192,11 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
                             if (width <= 0f) return true
                             val deltaFromLast = ev.rawX - lastTouchX
                             lastTouchX = ev.rawX
-                            val direction = if (Utilities.isRtl(resources)) -1f else 1f
-                            val progressDelta = direction * deltaFromLast / width
+                            val progressDelta = MinusOneGeometry.dragProgressDelta(
+                                deltaX = deltaFromLast,
+                                width = width,
+                                isRtl = Utilities.isRtl(resources),
+                            )
                             val newProgress = (currentProgress + progressDelta).coerceIn(0f, 1f)
                             updateOverlayPosition(newProgress)
                             launcherCallbacks?.onOverlayScrollChanged(newProgress)
@@ -228,18 +230,8 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
-            translationX = -ensureScreenWidth().toFloat()
-            addView(
-                ComposeView(context).apply {
-                    layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                    setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                    setContent {
-                        LawnchairTheme {
-                            LocalMinusOneScreen()
-                        }
-                    }
-                },
-            )
+            translationX = closedTranslationX()
+            addView(MinusOneComposeHost.create(context, content))
         }
     }
 
@@ -262,12 +254,26 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     private fun animateToProgress(targetProgress: Float) {
         progressAnimator?.cancel()
         progressAnimator = ValueAnimator.ofFloat(currentProgress, targetProgress).apply {
+            var wasCancelled = false
             duration = ANIMATION_DURATION_MS
             addUpdateListener { animator ->
                 val progress = animator.animatedValue as Float
                 updateOverlayPosition(progress)
                 launcherCallbacks?.onOverlayScrollChanged(progress)
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationCancel(animation: Animator) {
+                    wasCancelled = true
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    if (!wasCancelled) {
+                        updateOverlayPosition(targetProgress)
+                        launcherCallbacks?.onOverlayScrollChanged(targetProgress)
+                    }
+                    if (progressAnimator === animation) progressAnimator = null
+                }
+            })
             start()
         }
     }
@@ -275,8 +281,12 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
     private fun updateOverlayPosition(progress: Float) {
         currentProgress = progress.coerceIn(0f, 1f)
         val width = ensureScreenWidth().toFloat()
-        overlayContainer?.translationX = -width * (1f - currentProgress)
-        dispatchOverlayState(currentProgress)
+        overlayContainer?.translationX = MinusOneGeometry.translationX(
+            progress = currentProgress,
+            width = width,
+            isRtl = Utilities.isRtl(launcher.resources),
+        )
+        onStateChanged(stateMachine.update(currentProgress))
     }
 
     private fun ensureScreenWidth(): Int {
@@ -295,8 +305,6 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
         progressAnimator?.cancel()
         progressAnimator = null
         launcherCallbacks = null
-        lastReportedOverlayState = null
-
         val rootView = launcher.rootView
         if (isAdded && rootView != null) {
             rootView.removeView(overlayContainer)
@@ -307,39 +315,16 @@ class LocalLauncherOverlay(private val launcher: LawnchairLauncher) :
         isAdded = false
     }
 
-    fun isOverlayVisible(): Boolean = currentProgress > 0.01f
-
-    fun isOnOverlay(): Boolean = currentProgress >= 0.99f
-
-    private fun dispatchOverlayState(progress: Float, force: Boolean = false) {
-        val normalizedProgress = progress.coerceIn(0f, 1f)
-        val state = when {
-            normalizedProgress <= CLOSED_PROGRESS_EPSILON -> MinusOneOverlayState.Closed
-            normalizedProgress >= OPENED_PROGRESS_EPSILON -> MinusOneOverlayState.Opened
-            else -> MinusOneOverlayState.Sliding
-        }
-        if (!force && state == lastReportedOverlayState && state != MinusOneOverlayState.Sliding) {
-            return
-        }
-        lastReportedOverlayState = state
-        launcher.onLocalMinusOneOverlayStateChanged(state)
-        LawnchairSdkRegistry.dispatchMinusOneOverlayState(state, normalizedProgress)
+    private fun closedTranslationX(): Float {
+        return MinusOneGeometry.translationX(
+            progress = 0f,
+            width = ensureScreenWidth().toFloat(),
+            isRtl = Utilities.isRtl(launcher.resources),
+        )
     }
 
     companion object {
         private const val ANIMATION_DURATION_MS = 250L
         private const val SWITCH_THRESHOLD = 0.3f
-        private const val CLOSED_PROGRESS_EPSILON = 0.01f
-        private const val OPENED_PROGRESS_EPSILON = 0.99f
-    }
-}
-
-@Composable
-private fun LocalMinusOneScreen() {
-    val minusOneContentProvider = LawnchairSdkRegistry.minusOneContentProvider
-    if (minusOneContentProvider != null) {
-        minusOneContentProvider.Content(Modifier.fillMaxSize())
-    } else {
-        Box(modifier = Modifier.fillMaxSize())
     }
 }

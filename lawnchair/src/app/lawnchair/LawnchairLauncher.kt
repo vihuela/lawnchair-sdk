@@ -40,13 +40,12 @@ import app.lawnchair.factory.LawnchairWidgetHolder
 import app.lawnchair.gestures.GestureController
 import app.lawnchair.gestures.VerticalSwipeTouchController
 import app.lawnchair.gestures.config.GestureHandlerConfig
-import app.lawnchair.nexuslauncher.LocalLauncherOverlay
-import app.lawnchair.nexuslauncher.OverlayCallbackImpl
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
 import app.lawnchair.sdk.LawnchairSdkRegistry
-import app.lawnchair.sdk.SdkDesktopVisibilityReporter
+import app.lawnchair.sdk.MinusOneCoordinator
 import app.lawnchair.sdk.SdkDesktopItemsSynchronizer
+import app.lawnchair.sdk.SdkDesktopVisibilityReporter
 import app.lawnchair.theme.ThemeProvider
 import app.lawnchair.ui.popup.LauncherOptionsPopup
 import app.lawnchair.ui.popup.LawnchairShortcut
@@ -94,19 +93,13 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 class LawnchairLauncher : QuickstepLauncher() {
-    private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
-    private var localOverlay: LocalLauncherOverlay? = null
     private var hasSyncedSdkDesktopItems = false
-    private var hasPendingSdkDesktopItemsRetry = false
-    private var pendingOpenMinusOne = false
     private lateinit var sdkDesktopVisibilityReporter: SdkDesktopVisibilityReporter
-    private val sdkDesktopItemsRetryRunnable = Runnable {
-        hasPendingSdkDesktopItemsRetry = false
-        maybeSyncSdkDesktopItems()
-        maybeOpenPendingMinusOne()
-    }
     private val prefs by unsafeLazy { PreferenceManager.getInstance(this) }
     private val preferenceManager2 by unsafeLazy { PreferenceManager2.getInstance(this) }
+    private val minusOneCoordinator by unsafeLazy {
+        MinusOneCoordinator(this, ::shouldEnableLocalMinusOne)
+    }
     private val insetsController by unsafeLazy { WindowInsetsControllerCompat(launcher.window, rootView) }
     private val themeProvider by unsafeLazy { ThemeProvider.INSTANCE.get(this) }
     private val noStatusBarStateListener = object : StateManager.StateListener<LauncherState> {
@@ -154,21 +147,15 @@ class LawnchairLauncher : QuickstepLauncher() {
             )
         }
         layoutInflater.factory2 = LawnchairLayoutFactory(this)
-        localOverlay = LocalLauncherOverlay(this)
+        // Launcher asks for its overlay while super.onCreate is running.
+        minusOneCoordinator
         super.onCreate(savedInstanceState)
         sdkDesktopVisibilityReporter = SdkDesktopVisibilityReporter(this).also {
             it.onCreate(savedInstanceState)
             launcher.stateManager.addStateListener(it)
         }
-        localOverlay?.initialize()
-        localOverlay?.setEnabled(shouldEnableLocalMinusOne())
-        val shouldOpenMinusOneOnLaunch = LawnchairSdkRegistry.openMinusOneOnLauncherLaunch
-        if (shouldOpenMinusOneOnLaunch) {
-            openMinusOneImmediatelyOnLaunch()
-        }
-        pendingOpenMinusOne = intent?.getBooleanExtra(EXTRA_OPEN_MINUS_ONE, false) == true
+        minusOneCoordinator.initialize(savedInstanceState, intent, sdkDesktopVisibilityReporter)
         maybeSyncSdkDesktopItems()
-        maybeOpenPendingMinusOne()
 
         prefs.launcherTheme.subscribeChanges(this, ::updateTheme)
         launcher.stateManager.addStateListener(clearSearchStateListener)
@@ -237,7 +224,7 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     private fun shouldEnableLocalMinusOne(): Boolean {
         return preferenceManager2.enableFeed.firstBlocking() &&
-            LawnchairSdkRegistry.hasMinusOneContentProvider
+            LawnchairSdkRegistry.hasMinusOne
     }
 
     override fun collectStateHandlers(out: MutableList<StateHandler<LauncherState>>) {
@@ -293,7 +280,7 @@ class LawnchairLauncher : QuickstepLauncher() {
         super.finishBindingItems(pagesBoundFirst)
         sdkDesktopVisibilityReporter.onWorkspaceBindingComplete()
         maybeSyncSdkDesktopItems()
-        maybeOpenPendingMinusOne()
+        minusOneCoordinator.onLauncherReady()
     }
 
     override fun handleGestureContract(intent: Intent?) {
@@ -398,7 +385,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onResume() {
         super.onResume()
         restartIfPending()
-        maybeOpenPendingMinusOne()
+        minusOneCoordinator.onLauncherReady()
 
         dragLayer.viewTreeObserver.addOnDrawListener(
             object : ViewTreeObserver.OnDrawListener {
@@ -435,15 +422,11 @@ class LawnchairLauncher : QuickstepLauncher() {
     }
 
     override fun onStateBack() {
-        if (localOverlay?.isOverlayVisible() == true) {
-            localOverlay?.hideOverlay(true)
-            return
-        }
+        if (minusOneCoordinator.handleBack()) return
         super.onStateBack()
     }
 
     override fun onDestroy() {
-        Executors.MAIN_EXECUTOR.handler.removeCallbacks(sdkDesktopItemsRetryRunnable)
         launcher.stateManager.removeStateListener(sdkDesktopVisibilityReporter)
         super.onDestroy()
         // Only actually closes if required, safe to call if not enabled
@@ -453,13 +436,10 @@ class LawnchairLauncher : QuickstepLauncher() {
     override fun onNewIntent(intent: Intent) {
         sdkDesktopVisibilityReporter.onMainIntentReceived(intent)
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_OPEN_MINUS_ONE, false)) {
-            pendingOpenMinusOne = true
-            maybeOpenPendingMinusOne()
-        }
+        minusOneCoordinator.onNewIntent(intent)
     }
 
-    override fun getDefaultOverlay(): LauncherOverlayManager = localOverlay ?: defaultOverlay
+    override fun getDefaultOverlay(): LauncherOverlayManager = minusOneCoordinator.overlay
 
     fun recreateIfNotScheduled() {
         if (sRestartFlags == 0) {
@@ -492,61 +472,18 @@ class LawnchairLauncher : QuickstepLauncher() {
     private fun maybeSyncSdkDesktopItems() {
         if (hasSyncedSdkDesktopItems) return
         val modelLoaded = LauncherAppState.getInstance(this).model.isModelLoaded
-        if (!modelLoaded) {
-            if (!hasPendingSdkDesktopItemsRetry) {
-                hasPendingSdkDesktopItemsRetry = true
-                Executors.MAIN_EXECUTOR.handler.postDelayed(sdkDesktopItemsRetryRunnable, 200)
-            }
-            return
-        }
-        Executors.MAIN_EXECUTOR.handler.removeCallbacks(sdkDesktopItemsRetryRunnable)
-        hasPendingSdkDesktopItemsRetry = false
+        if (!modelLoaded) return
         hasSyncedSdkDesktopItems = true
-        SdkDesktopItemsSynchronizer.sync(this)
+        SdkDesktopItemsSynchronizer.refresh(this)
     }
 
-    private fun maybeOpenPendingMinusOne() {
-        if (!pendingOpenMinusOne) return
-        if (!shouldEnableLocalMinusOne()) {
-            pendingOpenMinusOne = false
-            return
-        }
-        if (!LauncherAppState.getInstance(this).model.isModelLoaded) {
-            if (!hasPendingSdkDesktopItemsRetry) {
-                hasPendingSdkDesktopItemsRetry = true
-                Executors.MAIN_EXECUTOR.handler.postDelayed(sdkDesktopItemsRetryRunnable, 200)
-            }
-            return
-        }
-        pendingOpenMinusOne = false
-        sdkDesktopVisibilityReporter.onMinusOneWillOpen()
-        dragLayer.post { getDefaultOverlay().openOverlay() }
-    }
-
-    private fun openMinusOneImmediatelyOnLaunch() {
-        if (!shouldEnableLocalMinusOne()) {
-            return
-        }
-        pendingOpenMinusOne = false
-        sdkDesktopVisibilityReporter.onMinusOneWillOpen()
-        localOverlay?.openOverlayImmediately()
-    }
-
-    fun openMinusOneAnimated(): Boolean {
-        if (!shouldEnableLocalMinusOne()) return false
-        pendingOpenMinusOne = true
-        maybeOpenPendingMinusOne()
-        return true
-    }
-
-    internal fun onLocalMinusOneOverlayStateChanged(state: app.lawnchair.sdk.api.MinusOneOverlayState) {
-        sdkDesktopVisibilityReporter.onMinusOneStateChanged(state)
-    }
+    internal fun getMinusOneCoordinator(): MinusOneCoordinator = minusOneCoordinator
 
     companion object {
         private const val FLAG_RECREATE = 1 shl 0
         private const val FLAG_RESTART = 1 shl 1
         const val EXTRA_OPEN_MINUS_ONE = "app.lawnchair.extra.OPEN_MINUS_ONE"
+        const val EXTRA_MINUS_ONE_ANIMATION = "app.lawnchair.extra.MINUS_ONE_ANIMATION"
 
         var sRestartFlags = 0
 

@@ -1,13 +1,7 @@
 package app.lawnchair.sdk.api
 
 interface LawnchairSdkEntry {
-    val minusOneContentProvider: MinusOneContentProvider?
-        get() = null
-
-    val openMinusOneOnLauncherLaunch: Boolean
-        get() = false
-
-    val minusOneOverlayStateListener: MinusOneOverlayStateListener?
+    val minusOne: MinusOneExtension?
         get() = null
 
     val desktopVisibleListener: DesktopVisibleListener?
@@ -16,6 +10,6 @@ interface LawnchairSdkEntry {
     val launcherIconClickListener: LauncherIconClickListener?
         get() = null
 
-    val desktopItemProvider: DesktopItemProvider?
+    val desktopItems: DesktopItemsExtension?
         get() = null
 }

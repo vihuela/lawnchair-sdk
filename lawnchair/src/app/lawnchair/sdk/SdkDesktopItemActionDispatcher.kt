@@ -2,6 +2,7 @@ package app.lawnchair.sdk
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import app.lawnchair.sdk.api.DesktopItemClickAction
 import app.lawnchair.sdk.api.DesktopItemSpec
 import com.android.launcher3.model.data.ItemInfo
@@ -11,6 +12,7 @@ object SdkDesktopItemActionDispatcher {
 
     const val EXTRA_DESKTOP_ITEM_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ID"
     const val EXTRA_DESKTOP_ITEM_ICON_RES_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ICON_RES_ID"
+    const val EXTRA_DESKTOP_ITEM_ICON_VERSION = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ICON_VERSION"
     const val EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE =
         "app.lawnchair.sdk.extra.DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE"
 
@@ -25,6 +27,7 @@ object SdkDesktopItemActionDispatcher {
     ): Intent {
         val baseIntent = when (val action = spec.clickAction) {
             is DesktopItemClickAction.LaunchIntent -> Intent(action.intent)
+
             is DesktopItemClickAction.ProviderAction ->
                 Intent(ACTION_DESKTOP_ITEM_PROVIDER).apply {
                     `package` = context.packageName
@@ -35,6 +38,7 @@ object SdkDesktopItemActionDispatcher {
         return baseIntent.apply {
             putExtra(EXTRA_DESKTOP_ITEM_ID, stableId)
             putExtra(EXTRA_DESKTOP_ITEM_ICON_RES_ID, spec.iconResId)
+            putExtra(EXTRA_DESKTOP_ITEM_ICON_VERSION, spec.iconVersion)
             putExtra(EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE, spec.allowDragToDelete)
         }
     }
@@ -72,10 +76,16 @@ object SdkDesktopItemActionDispatcher {
         val itemId = intent.getStringExtra(EXTRA_DESKTOP_ITEM_ID).orEmpty()
         val actionId = intent.getStringExtra(EXTRA_DESKTOP_ITEM_ACTION_ID).orEmpty()
         if (itemId.isBlank() || actionId.isBlank()) return false
-        return LawnchairSdkRegistry.desktopItemProvider?.onDesktopItemAction(
-            context = context,
-            itemId = itemId,
-            actionId = actionId,
-        ) == true
+        val extension = LawnchairSdkRegistry.desktopItems ?: return true
+        runCatching {
+            extension.onAction(
+                context = context,
+                itemId = itemId,
+                actionId = actionId,
+            )
+        }.onFailure { Log.e(TAG, "Desktop item action callback failed", it) }
+        return true
     }
+
+    private const val TAG = "SdkDesktopItemAction"
 }

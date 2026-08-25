@@ -1,6 +1,9 @@
 package app.lawnchair.sdk
 
 import android.content.Context
+import app.lawnchair.sdk.api.LawnchairOperationResult
+import app.lawnchair.sdk.api.MinusOneAnimation
+import app.lawnchair.sdk.api.MinusOneState
 import app.lawnchair.sdk.internal.LawnchairSdkRuntimeBridge
 
 object LawnchairOperations {
@@ -12,8 +15,29 @@ object LawnchairOperations {
         LawnchairSdkRuntimeBridge.operationsDelegate.launchDesktop(context)
     }
 
-    fun openMinusOneAnimated(context: Context): Boolean {
-        return LawnchairSdkRuntimeBridge.operationsDelegate.openMinusOneAnimated(context)
+    fun getMinusOneState(): MinusOneState? {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.getMinusOneState()
+    }
+
+    fun openMinusOne(
+        context: Context,
+        animation: MinusOneAnimation = MinusOneAnimation.Animated,
+    ): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.openMinusOne(context, animation)
+    }
+
+    fun closeMinusOne(
+        context: Context,
+        animation: MinusOneAnimation = MinusOneAnimation.Animated,
+    ): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.closeMinusOne(context, animation)
+    }
+
+    fun toggleMinusOne(
+        context: Context,
+        animation: MinusOneAnimation = MinusOneAnimation.Animated,
+    ): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.toggleMinusOne(context, animation)
     }
 
     fun requestSetDefaultLauncher(context: Context) {
@@ -28,7 +52,23 @@ object LawnchairOperations {
         LawnchairSdkRuntimeBridge.operationsDelegate.openLauncherAppInfo(context)
     }
 
-    fun removeDesktopItem(context: Context, itemId: String): Boolean {
-        return LawnchairSdkRuntimeBridge.operationsDelegate.removeDesktopItem(context, itemId)
+    fun refreshDesktopItems(context: Context): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.refreshDesktopItems(context)
+    }
+
+    fun removeDesktopItem(
+        context: Context,
+        itemId: String,
+        rememberRemoval: Boolean = true,
+    ): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.removeDesktopItem(
+            context,
+            itemId,
+            rememberRemoval,
+        )
+    }
+
+    fun restoreDesktopItem(context: Context, itemId: String): LawnchairOperationResult {
+        return LawnchairSdkRuntimeBridge.operationsDelegate.restoreDesktopItem(context, itemId)
     }
 }

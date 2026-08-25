@@ -38,7 +38,6 @@ import android.util.ArrayMap;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
-import com.android.launcher3.BuildConfig;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
@@ -146,7 +145,7 @@ public class ApiWrapper implements ResourceBasedOverride, SafeCloseable {
                         .appendQueryParameter("id", packageName)
                         .build())
                 .putExtra(Intent.EXTRA_REFERRER, new Uri.Builder().scheme("android-app")
-                        .authority(BuildConfig.APPLICATION_ID).build());
+                        .authority(mContext.getPackageName()).build());
     }
 
     /**

@@ -43,7 +43,6 @@ import app.lawnchair.sdk.SdkDesktopItemActionDispatcher;
 import app.lawnchair.sdk.SdkLauncherIconClickDispatcher;
 
 import com.android.launcher3.BubbleTextView;
-import com.android.launcher3.BuildConfig;
 import com.android.launcher3.Flags;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.Launcher;
@@ -405,7 +404,7 @@ public class ItemClickHandler {
             } else if (itemInfoWithIcon.itemType
                     == LauncherSettings.Favorites.ITEM_TYPE_PRIVATE_SPACE_INSTALL_APP_BUTTON) {
                 intent = ApiWrapper.INSTANCE.get(launcher).getAppMarketActivityIntent(
-                        BuildConfig.APPLICATION_ID,
+                        launcher.getPackageName(),
                         launcher.getAppsView().getPrivateProfileManager().getProfileUser());
                 launcher.getStatsLogManager().logger().log(
                         LAUNCHER_PRIVATE_SPACE_INSTALL_APP_BUTTON_TAP);
