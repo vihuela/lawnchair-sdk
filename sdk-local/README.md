@@ -24,7 +24,7 @@ Optional custom coordinates:
 ```bash
 ./gradlew \
   -PPUBLISH_GROUP=com.github.vihuela.lawnchair-sdk \
-  -PPUBLISH_VERSION=0.2.1-local \
+  -PPUBLISH_VERSION=0.2.2-local \
   :launcher-sdk-api:publishToMavenLocal \
   :launcher-sdk-runtime:publishToMavenLocal \
   :launcher-core:publishToMavenLocal
@@ -36,8 +36,8 @@ Optional custom coordinates:
 2. Create and push a tag:
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 3. Wait for JitPack to finish building the tag.
@@ -45,9 +45,9 @@ git push origin v0.2.1
 Dependency coordinates:
 
 ```text
-com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.2.1
-com.github.vihuela.lawnchair-sdk:launcher-sdk-runtime:v0.2.1
-com.github.vihuela.lawnchair-sdk:launcher-core:v0.2.1
+com.github.vihuela.lawnchair-sdk:launcher-sdk-api:v0.2.2
+com.github.vihuela.lawnchair-sdk:launcher-sdk-runtime:v0.2.2
+com.github.vihuela.lawnchair-sdk:launcher-core:v0.2.2
 ```
 
 ### 图标点击拦截
@@ -86,7 +86,7 @@ dependencyResolutionManagement {
 This section is the migration memo for rebasing this SDK branch onto a newer upstream Lawnchair branch later.
 
 - Upstream baseline before SDK customization: `854f2c036a` (`裁剪系统权限、一般app无关权限`)
-- Current release target: `v0.2.1`
+- Current release target: `v0.2.2`
 - Migration goal: when moving to a new upstream branch, re-apply the capabilities below in order
   instead of rediscovering them from scratch. Play-sensitive removals remain physical deletions and
   are enforced by `launcher-core/play-compliance.gradle`.

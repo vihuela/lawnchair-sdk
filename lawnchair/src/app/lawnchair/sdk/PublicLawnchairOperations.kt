@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.util.Log
 import app.lawnchair.LawnchairApp
 import app.lawnchair.LawnchairLauncher
+import app.lawnchair.sdk.api.DesktopRevealAnimation
 import app.lawnchair.sdk.api.LauncherCommand
 import app.lawnchair.sdk.api.LauncherCommandResult
 import app.lawnchair.sdk.api.LauncherEvent
@@ -30,6 +31,18 @@ internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
         val context = LawnchairApp.application
         return when (command) {
             LauncherCommand.LaunchDesktop -> runActivityCommand { launchDesktop(context) }
+
+            is LauncherCommand.RevealDesktopItem -> executeDesktopItemReveal(
+                context,
+                command.itemId,
+                command.animation,
+            )
+
+            is LauncherCommand.OpenDesktopItem -> executeDesktopItemOpen(
+                context,
+                command.itemId,
+                command.animation,
+            )
 
             is LauncherCommand.OpenMinusOne -> executeMinusOneOpen(context, command.animation)
 
@@ -80,6 +93,65 @@ internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
             Intent(context, LawnchairLauncher::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
         )
+    }
+
+    private suspend fun executeDesktopItemReveal(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+    ): LauncherCommandResult = executeDesktopItemRequest(
+        context = context,
+        itemId = itemId,
+        animation = animation,
+        openAfterReveal = false,
+    )
+
+    private suspend fun executeDesktopItemOpen(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+    ): LauncherCommandResult = executeDesktopItemRequest(
+        context = context,
+        itemId = itemId,
+        animation = animation,
+        openAfterReveal = true,
+    )
+
+    private suspend fun executeDesktopItemRequest(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+        openAfterReveal: Boolean,
+    ): LauncherCommandResult {
+        val stableId = itemId.trim()
+        if (stableId.isEmpty()) {
+            return LauncherCommandResult.Rejected(LauncherRejectReason.InvalidItemId)
+        }
+        return executeOnMain {
+            runCatching {
+                context.startActivity(
+                    Intent(context, LawnchairLauncher::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        .putExtra(
+                            if (openAfterReveal) {
+                                LawnchairLauncher.EXTRA_OPEN_DESKTOP_ITEM_ID
+                            } else {
+                                LawnchairLauncher.EXTRA_REVEAL_DESKTOP_ITEM_ID
+                            },
+                            stableId,
+                        )
+                        .putExtra(LawnchairLauncher.EXTRA_DESKTOP_REVEAL_ANIMATION, animation.name),
+                )
+            }.fold(
+                onSuccess = { LauncherCommandResult.Queued },
+                onFailure = {
+                    LauncherCommandResult.Failed(
+                        LauncherFailureReason.ActivityLaunchFailed,
+                        it.message,
+                    )
+                },
+            )
+        }
     }
 
     private fun requestSetDefaultLauncher(context: Context) {

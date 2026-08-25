@@ -65,6 +65,8 @@ The goal of this fork is to keep Lawnchair’s launcher runtime, but make it eas
 | Declare the complete desired set of custom desktop icons | `app.lawnchair.sdk.api.DesktopItemsExtension`, `DesktopItemsSnapshot` |
 | Control whether injected desktop icons can be dragged to delete area | `DesktopItemSpec.allowDragToDelete` |
 | Refresh, remove, or restore injected desktop icons | `LawnchairOperations.execute(RefreshDesktopItems/RemoveDesktopItem/RestoreDesktopItem)` |
+| Open Launcher at an injected icon's current page, Hotseat, or folder | `LawnchairOperations.execute(RevealDesktopItem(itemId))` |
+| Open Launcher and execute an injected icon's configured click action | `LawnchairOperations.execute(OpenDesktopItem(itemId))` |
 | Handle injected desktop icon callbacks | `DesktopItemsExtension.onAction()` |
 | Observe launcher icon clicks with current-package classification | `LawnchairOperations.events` / `LauncherEvent.LauncherIconClicked` |
 | Suspend and intercept app icon clicks before the original action | `LawnchairSdkEntry.iconClickInterceptor` / `LauncherIconClickDecision` |

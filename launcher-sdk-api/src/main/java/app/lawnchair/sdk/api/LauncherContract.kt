@@ -3,6 +3,21 @@ package app.lawnchair.sdk.api
 sealed interface LauncherCommand {
     data object LaunchDesktop : LauncherCommand
 
+    /** Opens Launcher and reveals the SDK desktop item identified by its stable [itemId]. */
+    data class RevealDesktopItem(
+        val itemId: String,
+        val animation: DesktopRevealAnimation = DesktopRevealAnimation.Animated,
+    ) : LauncherCommand
+
+    /**
+     * Opens Launcher, reveals the SDK desktop item identified by its stable [itemId], and then
+     * executes the item's configured click action through the normal Launcher click pipeline.
+     */
+    data class OpenDesktopItem(
+        val itemId: String,
+        val animation: DesktopRevealAnimation = DesktopRevealAnimation.Immediate,
+    ) : LauncherCommand
+
     data class OpenMinusOne(
         val animation: MinusOneAnimation = MinusOneAnimation.Animated,
     ) : LauncherCommand
@@ -68,7 +83,15 @@ enum class LauncherRejectReason {
     LauncherNotReady,
     DataUnavailable,
     InvalidItemId,
+    ItemNotFound,
+    ItemNotRevealable,
+    ItemNotOpenable,
     InvalidLanguageTag,
+}
+
+enum class DesktopRevealAnimation {
+    Animated,
+    Immediate,
 }
 
 enum class LauncherFailureReason {

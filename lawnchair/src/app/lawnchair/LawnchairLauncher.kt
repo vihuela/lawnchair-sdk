@@ -437,6 +437,7 @@ class LawnchairLauncher : QuickstepLauncher() {
         sdkDesktopVisibilityReporter.onMainIntentReceived(intent)
         super.onNewIntent(intent)
         minusOneCoordinator.onNewIntent(intent)
+        LawnchairSdkHooks.onLauncherNewIntent(this, intent)
     }
 
     override fun getDefaultOverlay(): LauncherOverlayManager = minusOneCoordinator.overlay
@@ -472,7 +473,7 @@ class LawnchairLauncher : QuickstepLauncher() {
     private fun maybeSyncSdkDesktopItems() {
         if (hasSyncedSdkDesktopItems) return
         hasSyncedSdkDesktopItems = true
-        LawnchairSdkHooks.onLauncherStarted(this)
+        LawnchairSdkHooks.onLauncherStarted(this, intent)
     }
 
     internal fun getMinusOneCoordinator(): MinusOneCoordinator = minusOneCoordinator
@@ -482,6 +483,9 @@ class LawnchairLauncher : QuickstepLauncher() {
         private const val FLAG_RESTART = 1 shl 1
         const val EXTRA_OPEN_MINUS_ONE = "app.lawnchair.extra.OPEN_MINUS_ONE"
         const val EXTRA_MINUS_ONE_ANIMATION = "app.lawnchair.extra.MINUS_ONE_ANIMATION"
+        const val EXTRA_REVEAL_DESKTOP_ITEM_ID = "app.lawnchair.extra.REVEAL_DESKTOP_ITEM_ID"
+        const val EXTRA_OPEN_DESKTOP_ITEM_ID = "app.lawnchair.extra.OPEN_DESKTOP_ITEM_ID"
+        const val EXTRA_DESKTOP_REVEAL_ANIMATION = "app.lawnchair.extra.DESKTOP_REVEAL_ANIMATION"
 
         var sRestartFlags = 0
 

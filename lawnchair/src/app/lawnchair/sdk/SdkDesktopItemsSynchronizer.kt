@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import app.lawnchair.sdk.api.DesktopItemsSnapshot
+import app.lawnchair.sdk.api.DesktopRevealAnimation
 import app.lawnchair.sdk.api.LauncherCommandResult
+import app.lawnchair.sdk.runtime.DesktopItemRevealController
 import app.lawnchair.sdk.runtime.DesktopItemsController
 import app.lawnchair.sdk.runtime.DesktopItemsSourcePort
 import com.android.launcher3.model.data.ItemInfo
@@ -36,23 +38,69 @@ internal object SdkDesktopItemsSynchronizer {
         return controller(context).restore(itemId)
     }
 
-    fun onLauncherStarted(context: Context) {
-        requestRefresh(context)
+    suspend fun revealItemAsync(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+    ): LauncherCommandResult {
+        return holder(context).revealController.reveal(itemId, animation)
+    }
+
+    suspend fun openItemAsync(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+    ): LauncherCommandResult {
+        return holder(context).revealController.open(itemId, animation)
+    }
+
+    fun onLauncherStarted(
+        context: Context,
+        pendingItemId: String?,
+        animation: DesktopRevealAnimation,
+        openAfterReveal: Boolean,
+    ) {
+        LawnchairSdkScope.launch {
+            logAutomaticResult("desktop item refresh", refreshAsync(context))
+            if (pendingItemId != null) {
+                logAutomaticResult(
+                    if (openAfterReveal) "desktop item open" else "desktop item reveal",
+                    navigateItemAsync(context, pendingItemId, animation, openAfterReveal),
+                )
+            }
+        }
     }
 
     fun requestRefresh(context: Context) {
         LawnchairSdkScope.launch {
-            when (val result = refreshAsync(context)) {
-                is LauncherCommandResult.Failed -> {
-                    Log.e(TAG, "Automatic desktop item refresh failed: $result")
-                }
+            logAutomaticResult("desktop item refresh", refreshAsync(context))
+        }
+    }
 
-                is LauncherCommandResult.Rejected -> {
-                    Log.w(TAG, "Automatic desktop item refresh rejected: $result")
-                }
+    fun requestNavigation(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+        openAfterReveal: Boolean,
+    ) {
+        LawnchairSdkScope.launch {
+            logAutomaticResult(
+                if (openAfterReveal) "desktop item open" else "desktop item reveal",
+                navigateItemAsync(context, itemId, animation, openAfterReveal),
+            )
+        }
+    }
 
-                else -> Log.d(TAG, "Automatic desktop item refresh completed: $result")
-            }
+    private suspend fun navigateItemAsync(
+        context: Context,
+        itemId: String,
+        animation: DesktopRevealAnimation,
+        openAfterReveal: Boolean,
+    ): LauncherCommandResult {
+        return if (openAfterReveal) {
+            openItemAsync(context, itemId, animation)
+        } else {
+            revealItemAsync(context, itemId, animation)
         }
     }
 
@@ -62,23 +110,35 @@ internal object SdkDesktopItemsSynchronizer {
     }
 
     private fun controller(context: Context): DesktopItemsController {
+        return holder(context).controller
+    }
+
+    private fun holder(context: Context): ControllerHolder {
         val appContext = context.applicationContext
-        holder?.takeIf { it.context === appContext }?.let { return it.controller }
+        holder?.takeIf { it.context === appContext }?.let { return it }
         return synchronized(this) {
-            holder?.takeIf { it.context === appContext }?.controller ?: run {
+            holder?.takeIf { it.context === appContext } ?: run {
                 val workspace = LauncherWorkspaceAdapter(appContext)
-                DesktopItemsController(
-                    source = RegistryDesktopItemsSource,
-                    removalStore = SharedPreferencesDesktopRemovalStore(appContext),
+                ControllerHolder(
+                    context = appContext,
                     workspace = workspace,
-                ).also { holder = ControllerHolder(appContext, workspace, it) }
+                    controller = DesktopItemsController(
+                        source = RegistryDesktopItemsSource,
+                        removalStore = SharedPreferencesDesktopRemovalStore(appContext),
+                        workspace = workspace,
+                    ),
+                    revealController = DesktopItemRevealController(workspace),
+                ).also { holder = it }
             }
         }
     }
 
-    private fun workspace(context: Context): LauncherWorkspaceAdapter {
-        controller(context)
-        return checkNotNull(holder).workspace
+    private fun logAutomaticResult(operation: String, result: LauncherCommandResult) {
+        when (result) {
+            is LauncherCommandResult.Failed -> Log.e(TAG, "Automatic $operation failed: $result")
+            is LauncherCommandResult.Rejected -> Log.w(TAG, "Automatic $operation rejected: $result")
+            else -> Log.d(TAG, "Automatic $operation completed: $result")
+        }
     }
 
     private fun getStableId(intent: Intent?): String? {
@@ -91,6 +151,7 @@ internal object SdkDesktopItemsSynchronizer {
         val context: Context,
         val workspace: LauncherWorkspaceAdapter,
         val controller: DesktopItemsController,
+        val revealController: DesktopItemRevealController,
     )
 
     private object RegistryDesktopItemsSource : DesktopItemsSourcePort {

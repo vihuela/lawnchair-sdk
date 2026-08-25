@@ -3,15 +3,25 @@ package app.lawnchair.sdk
 import android.content.Context
 import android.content.Intent
 import android.os.Process
+import android.view.View
+import app.lawnchair.LawnchairLauncher
 import app.lawnchair.sdk.api.DesktopItemRowAnchor
 import app.lawnchair.sdk.api.DesktopItemSpec
+import app.lawnchair.sdk.api.DesktopRevealAnimation
+import app.lawnchair.sdk.api.MinusOneAnimation
 import app.lawnchair.sdk.runtime.DesktopGrid
+import app.lawnchair.sdk.runtime.DesktopItemLocation
+import app.lawnchair.sdk.runtime.DesktopItemOpenStatus
+import app.lawnchair.sdk.runtime.DesktopItemRevealPort
+import app.lawnchair.sdk.runtime.DesktopItemRevealStatus
 import app.lawnchair.sdk.runtime.DesktopItemsReconciler
 import app.lawnchair.sdk.runtime.DesktopWorkspaceMutation
 import app.lawnchair.sdk.runtime.DesktopWorkspacePort
+import com.android.launcher3.AbstractFloatingView
 import com.android.launcher3.LauncherAppState
 import com.android.launcher3.LauncherModel
 import com.android.launcher3.LauncherSettings
+import com.android.launcher3.LauncherState
 import com.android.launcher3.WorkspaceLayoutManager
 import com.android.launcher3.icons.BaseIconFactory
 import com.android.launcher3.icons.LauncherIcons
@@ -25,12 +35,16 @@ import com.android.launcher3.util.Executors
 import com.android.launcher3.util.IntArray
 import java.util.function.Predicate
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Android 15 LauncherModel/DB implementation of the launcher-independent workspace port. */
-internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort {
+internal class LauncherWorkspaceAdapter(context: Context) :
+    DesktopWorkspacePort,
+    DesktopItemRevealPort {
     private val appContext = context.applicationContext
     private val model: LauncherModel
         get() = LauncherAppState.getInstance(appContext).model
@@ -78,6 +92,241 @@ internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort
                     onFailure = { if (continuation.isActive) continuation.resumeWithException(it) },
                 )
             }
+        }
+    }
+
+    override suspend fun findLocation(itemId: String): DesktopItemLocation? = suspendCancellableCoroutine { continuation ->
+        model.enqueueModelUpdateTask(
+            FindDesktopItemLocationTask(itemId) { result ->
+                if (continuation.isActive) continuation.resumeWith(result)
+            },
+        )
+    }
+
+    override suspend fun reveal(
+        location: DesktopItemLocation,
+        animation: DesktopRevealAnimation,
+    ): DesktopItemRevealStatus = withContext(Dispatchers.Main.immediate) {
+        val launcher = LawnchairLauncher.instance ?: return@withContext DesktopItemRevealStatus.UiNotReady
+        launcher.getMinusOneCoordinator().requestCloseCommand(MinusOneAnimation.Immediate)
+        AbstractFloatingView.closeAllOpenViews(launcher, false)
+
+        launcher.stateManager.goToState(
+            LauncherState.NORMAL,
+            animation == DesktopRevealAnimation.Animated,
+        )
+        val stateReady = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+            while (!launcher.stateManager.isInStableState(LauncherState.NORMAL)) {
+                delay(UI_READY_POLL_INTERVAL_MILLIS)
+            }
+            true
+        } ?: false
+        if (!stateReady) return@withContext DesktopItemRevealStatus.UiNotReady
+
+        revealLocation(launcher, location, animation)
+    }
+
+    override suspend fun open(itemId: String): DesktopItemOpenStatus {
+        val item = findItem(itemId) ?: return DesktopItemOpenStatus.NotOpenable
+        return withContext(Dispatchers.Main.immediate) {
+            val launcher = LawnchairLauncher.instance
+                ?: return@withContext DesktopItemOpenStatus.UiNotReady
+            val itemView = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+                var view = findBoundItemView(launcher, item)
+                while (
+                    view == null ||
+                    view.windowToken == null ||
+                    !launcher.workspace.isFinishedSwitchingState
+                ) {
+                    delay(UI_READY_POLL_INTERVAL_MILLIS)
+                    view = findBoundItemView(launcher, item)
+                }
+                view
+            } ?: return@withContext DesktopItemOpenStatus.UiNotReady
+
+            if (itemView.performClick()) {
+                DesktopItemOpenStatus.Opened
+            } else {
+                DesktopItemOpenStatus.NotOpenable
+            }
+        }
+    }
+
+    private suspend fun findItem(itemId: String): WorkspaceItemInfo? = suspendCancellableCoroutine { continuation ->
+        model.enqueueModelUpdateTask(
+            FindDesktopItemTask(itemId) { result ->
+                if (continuation.isActive) continuation.resumeWith(result)
+            },
+        )
+    }
+
+    private fun findBoundItemView(
+        launcher: LawnchairLauncher,
+        item: WorkspaceItemInfo,
+    ): View? {
+        launcher.workspace.getHomescreenIconByItemId(item.id)?.let { return it }
+        if (item.container < 0) return null
+        val folder = launcher.findFolderIcon(item.container)?.folder ?: return null
+        var match: View? = null
+        folder.iterateOverItems { info, view ->
+            (info.id == item.id).also { isMatch ->
+                if (isMatch) match = view
+            }
+        }
+        return match
+    }
+
+    private suspend fun revealLocation(
+        launcher: LawnchairLauncher,
+        location: DesktopItemLocation,
+        animation: DesktopRevealAnimation,
+    ): DesktopItemRevealStatus {
+        return when (location) {
+            is DesktopItemLocation.Workspace -> revealWorkspacePage(launcher, location.screenId, animation)
+
+            DesktopItemLocation.Hotseat -> DesktopItemRevealStatus.Revealed
+
+            is DesktopItemLocation.Folder -> {
+                val parentResult = revealLocation(launcher, location.parent, animation)
+                if (parentResult != DesktopItemRevealStatus.Revealed) return parentResult
+                val folderIcon = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+                    var icon = launcher.findFolderIcon(location.folderId)
+                    while (icon == null) {
+                        delay(UI_READY_POLL_INTERVAL_MILLIS)
+                        icon = launcher.findFolderIcon(location.folderId)
+                    }
+                    icon
+                } ?: return DesktopItemRevealStatus.UiNotReady
+                val folder = folderIcon.folder
+                folder.animateOpen()
+                val content = folder.content
+                val pageIndex = location.itemRank / content.itemsPerPage()
+                if (pageIndex >= content.pageCount) {
+                    return DesktopItemRevealStatus.NotRevealable
+                }
+                if (animation == DesktopRevealAnimation.Animated) {
+                    content.snapToPage(pageIndex)
+                } else {
+                    content.snapToPageImmediately(pageIndex)
+                }
+                val pageReady = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+                    while (content.nextPage != pageIndex || content.isPageInTransition) {
+                        delay(UI_READY_POLL_INTERVAL_MILLIS)
+                    }
+                    true
+                } ?: false
+                if (pageReady) {
+                    DesktopItemRevealStatus.Revealed
+                } else {
+                    DesktopItemRevealStatus.UiNotReady
+                }
+            }
+
+            DesktopItemLocation.Unsupported -> DesktopItemRevealStatus.NotRevealable
+        }
+    }
+
+    private suspend fun revealWorkspacePage(
+        launcher: LawnchairLauncher,
+        screenId: Int,
+        animation: DesktopRevealAnimation,
+    ): DesktopItemRevealStatus {
+        val workspace = launcher.workspace
+        val pageIndex = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+            var index = workspace.getPageIndexForScreenId(screenId)
+            while (index < 0) {
+                delay(UI_READY_POLL_INTERVAL_MILLIS)
+                index = workspace.getPageIndexForScreenId(screenId)
+            }
+            index
+        } ?: return DesktopItemRevealStatus.UiNotReady
+
+        if (animation == DesktopRevealAnimation.Animated) {
+            workspace.snapToPage(pageIndex)
+        } else {
+            workspace.snapToPageImmediately(pageIndex)
+        }
+        val pageReady = withTimeoutOrNull(UI_READY_TIMEOUT_MILLIS) {
+            while (workspace.nextPage != pageIndex || workspace.isPageInTransition) {
+                delay(UI_READY_POLL_INTERVAL_MILLIS)
+            }
+            true
+        } ?: false
+        return if (pageReady) {
+            DesktopItemRevealStatus.Revealed
+        } else {
+            DesktopItemRevealStatus.UiNotReady
+        }
+    }
+
+    private class FindDesktopItemLocationTask(
+        private val stableId: String,
+        private val completion: (Result<DesktopItemLocation?>) -> Unit,
+    ) : LauncherModel.ModelUpdateTask {
+        override fun execute(
+            taskController: ModelTaskController,
+            dataModel: BgDataModel,
+            apps: AllAppsList,
+        ) {
+            completion(
+                runCatching {
+                    synchronized(dataModel) {
+                        val item = dataModel.itemsIdMap.firstOrNull {
+                            it is WorkspaceItemInfo && getStableId(it.intent) == stableId
+                        } ?: return@synchronized null
+                        resolveLocation(item, dataModel, hashSetOf())
+                    }
+                },
+            )
+        }
+
+        private fun resolveLocation(
+            item: ItemInfo,
+            dataModel: BgDataModel,
+            visitedIds: MutableSet<Int>,
+        ): DesktopItemLocation {
+            if (!visitedIds.add(item.id)) return DesktopItemLocation.Unsupported
+            return when (item.container) {
+                LauncherSettings.Favorites.CONTAINER_DESKTOP -> {
+                    DesktopItemLocation.Workspace(item.screenId)
+                }
+
+                LauncherSettings.Favorites.CONTAINER_HOTSEAT,
+                LauncherSettings.Favorites.CONTAINER_HOTSEAT_PREDICTION,
+                -> DesktopItemLocation.Hotseat
+
+                else -> {
+                    if (item.container < 0) return DesktopItemLocation.Unsupported
+                    val parent = dataModel.itemsIdMap[item.container]
+                        ?: return DesktopItemLocation.Unsupported
+                    DesktopItemLocation.Folder(
+                        folderId = item.container,
+                        itemRank = item.rank,
+                        parent = resolveLocation(parent, dataModel, visitedIds),
+                    )
+                }
+            }
+        }
+    }
+
+    private class FindDesktopItemTask(
+        private val stableId: String,
+        private val completion: (Result<WorkspaceItemInfo?>) -> Unit,
+    ) : LauncherModel.ModelUpdateTask {
+        override fun execute(
+            taskController: ModelTaskController,
+            dataModel: BgDataModel,
+            apps: AllAppsList,
+        ) {
+            completion(
+                runCatching {
+                    synchronized(dataModel) {
+                        dataModel.itemsIdMap.firstOrNull {
+                            it is WorkspaceItemInfo && getStableId(it.intent) == stableId
+                        } as? WorkspaceItemInfo
+                    }
+                },
+            )
         }
     }
 
@@ -319,6 +568,8 @@ internal class LauncherWorkspaceAdapter(context: Context) : DesktopWorkspacePort
     private companion object {
         const val MODEL_READY_TIMEOUT_MILLIS = 10_000L
         const val MODEL_READY_POLL_INTERVAL_MILLIS = 25L
+        const val UI_READY_TIMEOUT_MILLIS = 10_000L
+        const val UI_READY_POLL_INTERVAL_MILLIS = 16L
 
         fun getStableId(intent: Intent?): String? {
             return intent?.getStringExtra(SdkDesktopItemActionDispatcher.EXTRA_DESKTOP_ITEM_ID)
