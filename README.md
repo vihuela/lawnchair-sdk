@@ -46,10 +46,10 @@ The goal of this fork is to keep Lawnchair’s launcher runtime, but make it eas
 | Area | Summary | Key locations |
 | --- | --- | --- |
 | System feature trimming | Removed permissions, manifests, services, and feature entry points that are typically irrelevant or risky for a normal third-party app, such as root helpers, bugreport flow, accessibility/sleep related capabilities, and some SystemUI-coupled behavior. | `AndroidManifest-common.xml`, `lawnchair/AndroidManifest.xml`, `quickstep/AndroidManifest.xml`, `wmshell/AndroidManifest.xml`, `lawnchair/src/app/lawnchair/root/**`, `lawnchair/src/app/lawnchair/bugreport/**` |
-| SDK modularization | Split the fork into reusable SDK-facing modules so host apps can depend on a stable API surface instead of the full launcher internals. | `launcher-core/**`, `launcher-sdk-api/**`, `sdk-local/**`, `settings.gradle`, `build.gradle` |
-| Minus-one screen SDK | Replaced the original feed path with a local implementation. `MinusOneExtension` provides Compose content and launch policy, while the coordinator exposes deterministic open/close phases and animated or immediate operations. | `lawnchair/src/app/lawnchair/sdk/MinusOneCoordinator.kt`, `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneExtension.kt`, `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/MinusOneState.kt` |
-| Desktop item injection | Host apps declare a complete desired snapshot of stable-ID desktop items. Reconciliation handles persistence, conflict resolution, icon versions, provider actions, explicit intents, batch placement, drag-delete tombstones, Undo, and explicit refresh/remove/restore operations. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/api/DesktopItemsExtension.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemsSynchronizer.kt`, `lawnchair/src/app/lawnchair/sdk/DesktopItemPlacementResolver.kt`, `lawnchair/src/app/lawnchair/sdk/SdkDesktopItemActionDispatcher.kt`, `src/com/android/launcher3/DropTargetHandler.kt`, `src/com/android/launcher3/model/ModelWriter.java` |
-| Public host operations | Exposed host-callable operations such as checking default launcher state, launching desktop, opening minus-one with animation, and opening launcher/home settings. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairOperations.kt`, `lawnchair/src/app/lawnchair/sdk/PublicLawnchairOperations.kt` |
+| SDK modularization | Split the fork into public contract, launcher-independent runtime, and Android 15 adapter layers. | `launcher-sdk-api/**`, `launcher-sdk-runtime/**`, `launcher-core/**`, `sdk-local/**` |
+| Minus-one screen SDK | `MinusOneExtension` provides Compose content while a pure controller owns commands/state and the coordinator adapts Launcher3 overlay/lifecycle APIs. | `launcher-sdk-runtime/**/MinusOneController.kt`, `lawnchair/src/app/lawnchair/sdk/MinusOneCoordinator.kt`, `lawnchair/src/app/lawnchair/nexuslauncher/LocalLauncherOverlay.kt` |
+| Desktop item injection | A pure controller coordinates the desired snapshot and tombstones; the Android adapter alone owns LauncherModel/DB details. | `launcher-sdk-runtime/**/DesktopItemsController.kt`, `lawnchair/src/app/lawnchair/sdk/LauncherWorkspaceAdapter.kt`, `lawnchair/src/app/lawnchair/sdk/SharedPreferencesDesktopRemovalStore.kt` |
+| Public host operations | Host commands use a suspending command/result API; state and events use Flow. Legacy synchronous wrappers were removed. | `launcher-sdk-api/**/LauncherContract.kt`, `launcher-sdk-api/**/LawnchairOperations.kt`, `lawnchair/src/app/lawnchair/sdk/PublicLawnchairOperations.kt` |
 | Host `Application` compatibility | Added a runtime bridge so local `includeBuild` host apps no longer need to subclass `LawnchairApp`; they can initialize through a host-facing SDK entry while keeping most original `LawnchairApp` behavior intact. | `launcher-sdk-api/src/main/java/app/lawnchair/sdk/LawnchairSdkHost.kt`, `lawnchair/src/app/lawnchair/LawnchairHostRuntime.kt`, `lawnchair/src/app/lawnchair/LawnchairApp.kt` |
 | Settings and UX trimming | Removed or simplified settings and debug surfaces that are not important for an embedded launcher SDK use case, including some about/experimental/search/feed related entries. | `lawnchair/src/app/lawnchair/ui/preferences/**`, `quickstep/src/com/android/launcher3/uioverrides/flags/DevOptionsUiHelper.kt`, `lawnchair/res/values/config.xml`, `lawnchair/res/values/strings.xml` |
 | Distribution and publishing | Added Maven publishing, JitPack support, and local-source integration helpers so the SDK can be consumed either remotely or via `includeBuild`. | `launcher-core/build.gradle`, `launcher-sdk-api/build.gradle`, `jitpack.yml`, `sdk-local/build.gradle`, `sdk-local/settings.gradle` |
@@ -58,27 +58,29 @@ The goal of this fork is to keep Lawnchair’s launcher runtime, but make it eas
 
 | Capability | API surface |
 | --- | --- |
-| Provide minus-one Compose UI, launch policy, and state callback | `app.lawnchair.sdk.api.MinusOneExtension` |
-| Read the current `Closed/Opening/Opened/Closing` state | `app.lawnchair.sdk.LawnchairOperations.getMinusOneState()` |
-| Open, close, or toggle minus-one with animated/immediate behavior | `app.lawnchair.sdk.LawnchairOperations.openMinusOne()`, `closeMinusOne()`, `toggleMinusOne()` |
-| Listen for desktop becoming visible with return source classification, dispatched on the next main-thread turn after visibility is confirmed so host apps can safely schedule lightweight dialogs | `app.lawnchair.sdk.api.DesktopVisibleListener`, `app.lawnchair.sdk.api.DesktopVisibleSource` |
+| Provide minus-one Compose UI and launch policy | `app.lawnchair.sdk.api.MinusOneExtension` |
+| Read the current `Closed/Opening/Opened/Closing` state | `LawnchairOperations.state` |
+| Open, close, or toggle minus-one with animated/immediate behavior | `LawnchairOperations.execute(OpenMinusOne/CloseMinusOne/ToggleMinusOne)` |
+| Observe desktop visibility with return source classification after visibility is confirmed | `LawnchairOperations.events` / `LauncherEvent.DesktopVisible` |
 | Declare the complete desired set of custom desktop icons | `app.lawnchair.sdk.api.DesktopItemsExtension`, `DesktopItemsSnapshot` |
 | Control whether injected desktop icons can be dragged to delete area | `DesktopItemSpec.allowDragToDelete` |
-| Refresh, remove, or restore injected desktop icons | `LawnchairOperations.refreshDesktopItems()`, `removeDesktopItem()`, `restoreDesktopItem()` |
+| Refresh, remove, or restore injected desktop icons | `LawnchairOperations.execute(RefreshDesktopItems/RemoveDesktopItem/RestoreDesktopItem)` |
 | Handle injected desktop icon callbacks | `DesktopItemsExtension.onAction()` |
-| Observe launcher icon clicks with current-package classification | `app.lawnchair.sdk.api.LauncherIconClickListener`, `app.lawnchair.sdk.api.LauncherIconClickEvent` |
+| Observe launcher icon clicks with current-package classification | `LawnchairOperations.events` / `LauncherEvent.LauncherIconClicked` |
 | Launch desktop / request default launcher / open launcher settings | `app.lawnchair.sdk.LawnchairOperations` |
 | Initialize SDK from a normal host `Application` | `app.lawnchair.sdk.LawnchairSdkHost.initialize()` |
+| Execute typed commands and observe runtime state/events | `LawnchairOperations.execute()`, `LawnchairOperations.state`, `LawnchairOperations.events` |
 
 ### Recommended porting order for a new upstream branch
 
 If this SDK fork needs to be adapted onto a newer upstream Lawnchair branch, apply changes in this order:
 
-1. Restore module split and publishing setup: `launcher-core`, `launcher-sdk-api`, `sdk-local`.
-2. Re-apply manifest, permission, and system-feature trimming.
-3. Reconnect public SDK API surfaces and registry wiring.
-4. Re-apply minus-one and desktop item business capabilities.
-5. Re-apply host `Application` compatibility and verify `includeBuild` behaves like remote dependency usage.
+1. Restore `launcher-sdk-api` and `launcher-sdk-runtime`; run their unit tests.
+2. Select the new prebuilt family with `launcherPlatformVersion` and port the Android adapters.
+3. Reconnect the narrow `LawnchairSdkHooks` call sites.
+4. Physically remove the Play-sensitive sources, declarations, resources, and dependencies, then
+   run `verifyPlayCompliance`; do not replace those removals with runtime feature flags.
+5. Verify host `Application` compatibility and local/remote publication behavior.
 
 ### Files most likely to conflict during future rebases
 
@@ -96,7 +98,7 @@ If this SDK fork needs to be adapted onto a newer upstream Lawnchair branch, app
 
 ### Detailed migration ledger
 
-For a more detailed, file-oriented migration memo from the SDK fork history, see [`sdk-local/README.md`](sdk-local/README.md). That document is intended to be imported by AI tools or future maintainers when porting this fork onto a newer upstream branch.
+For the current boundaries and 16-dev procedure, see [`launcher-core/PORTING.md`](launcher-core/PORTING.md). The historical file ledger remains in [`sdk-local/README.md`](sdk-local/README.md).
 
 ## Features
 

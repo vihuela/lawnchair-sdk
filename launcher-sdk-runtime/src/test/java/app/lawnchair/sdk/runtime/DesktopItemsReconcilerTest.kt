@@ -1,4 +1,4 @@
-package app.lawnchair.sdk
+package app.lawnchair.sdk.runtime
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

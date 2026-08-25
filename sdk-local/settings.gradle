@@ -107,5 +107,8 @@ project(":wmshell").projectDir = new File(rootDir, "../wmshell")
 include ":launcher-sdk-api"
 project(":launcher-sdk-api").projectDir = new File(rootDir, "../launcher-sdk-api")
 
+include ":launcher-sdk-runtime"
+project(":launcher-sdk-runtime").projectDir = new File(rootDir, "../launcher-sdk-runtime")
+
 include ":launcher-core"
 project(":launcher-core").projectDir = new File(rootDir, "../launcher-core")

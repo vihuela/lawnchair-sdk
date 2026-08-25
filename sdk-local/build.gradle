@@ -22,6 +22,7 @@ final def appCompileSdk = 36
 final def appCompileSdkMinor = 1
 final def appMinSdk = 26
 final def appTargetSdk = 35
+final def launcherPlatformVersion = providers.gradleProperty("launcherPlatformVersion").orElse("15").get()
 final def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse(providers.gradleProperty("PUBLISH_GROUP"))
     .orElse("app.lawnchair")
@@ -105,9 +106,14 @@ allprojects {
 
     ext {
         FRAMEWORK_PREBUILTS_DIR = "$rootDir/prebuilts/libs"
+        LAUNCHER_PLATFORM_VERSION = launcherPlatformVersion
+        FRAMEWORK_JAR = "framework-${launcherPlatformVersion}.jar"
+        SYSTEM_UI_STATSD_JAR = "SystemUI-statsd-${launcherPlatformVersion}.jar"
+        WINDOW_MANAGER_SHELL_JAR = "WindowManager-Shell-${launcherPlatformVersion}.jar"
 
         addFrameworkJar = { String name ->
-            def frameworkJar = new File(FRAMEWORK_PREBUILTS_DIR, name)
+            def selectedName = name == "framework-15.jar" ? FRAMEWORK_JAR : name
+            def frameworkJar = new File(FRAMEWORK_PREBUILTS_DIR, selectedName)
             if (!frameworkJar.exists()) {
                 throw new IllegalArgumentException("Framework jar path ${frameworkJar.path} doesn't exist")
             }
@@ -128,7 +134,7 @@ allprojects {
             dependencies {
                 compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "SystemUI-core.jar")
                 compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "SystemUI-statsd.jar")
-                compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: "WindowManager-Shell-15.jar")
+                compileOnly fileTree(dir: FRAMEWORK_PREBUILTS_DIR, include: WINDOW_MANAGER_SHELL_JAR)
 
                 compileOnly projects.compatLib
                 compileOnly projects.compatLib.compatLibVQ
@@ -144,7 +150,7 @@ allprojects {
 
 subprojects { subproject ->
     plugins.withId("com.android.library") {
-        if (subproject.name in ["launcher-core", "launcher-sdk-api"]) {
+        if (subproject.name in ["launcher-core", "launcher-sdk-api", "launcher-sdk-runtime"]) {
             return
         }
 

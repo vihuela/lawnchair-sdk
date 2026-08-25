@@ -140,7 +140,7 @@ internal class SdkDesktopVisibilityReporter(
 
                 pendingSource = null
                 hasDispatchedDesktopVisible = true
-                LawnchairSdkRegistry.dispatchDesktopVisible(source)
+                LawnchairRuntimeSignals.onDesktopVisible(source)
             }
         }
         launcher.dragLayer.invalidate()

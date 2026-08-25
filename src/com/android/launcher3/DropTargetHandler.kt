@@ -2,7 +2,7 @@ package com.android.launcher3
 
 import android.content.ComponentName
 import android.view.View
-import app.lawnchair.sdk.SdkDesktopItemsSynchronizer
+import app.lawnchair.sdk.LawnchairSdkHooks
 import com.android.launcher3.BaseDraggingActivity.EVENT_RESUMED
 import com.android.launcher3.DropTarget.DragObject
 import com.android.launcher3.LauncherConstants.ActivityCodes
@@ -77,7 +77,7 @@ class DropTargetHandler(launcher: Launcher) {
 
     fun onDeleteComplete(item: ItemInfo) {
         mLauncher.modelWriter.addDeleteCommitCallback {
-            SdkDesktopItemsSynchronizer.onUserRemovalCommitted(mLauncher, item)
+            LawnchairSdkHooks.onUserRemovalCommitted(mLauncher, item)
         }
         var pageItem: ItemInfo = item
         if (item.container <= 0) {
@@ -108,7 +108,7 @@ class DropTargetHandler(launcher: Launcher) {
         // because we already remove the drag view from the folder (if the drag originated from
         // a folder) in Folder.beginDrag()
         mLauncher.removeItem(view, item, true /* deleteFromDb */, "removed by accessibility drop")
-        SdkDesktopItemsSynchronizer.onUserRemovalCommitted(mLauncher, item)
+        LawnchairSdkHooks.onUserRemovalCommitted(mLauncher, item)
         mLauncher.workspace.stripEmptyScreens()
         mLauncher.dragLayer.announceForAccessibility(announcement)
     }

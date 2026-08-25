@@ -1,0 +1,179 @@
+import org.gradle.api.GradleException
+
+// Play-sensitive capabilities must be physically absent from the distribution source tree.
+// This is an enforcement list, not a source-set exclusion list: a newly restored forbidden file,
+// manifest declaration, or dependency fails the build instead of being silently disabled.
+def repositoryRoot = rootProject.projectDir.name == "sdk-local"
+    ? rootProject.projectDir.parentFile
+    : rootProject.projectDir
+
+def forbiddenSourcePatterns = [
+    "lawnchair/aidl/app/lawnchair/root/**",
+    "lawnchair/res/layout/overview_actions_container.xml",
+    "lawnchair/src/app/lawnchair/LawnchairAccessibilityService.kt",
+    "lawnchair/src/app/lawnchair/bugreport/BugReportReceiver.kt",
+    "lawnchair/src/app/lawnchair/bugreport/LawnchairBugReporter.kt",
+    "lawnchair/src/app/lawnchair/bugreport/UploaderService.kt",
+    "lawnchair/src/app/lawnchair/gestures/handlers/OpenNotificationsHandler.kt",
+    "lawnchair/src/app/lawnchair/gestures/handlers/RecentsGestureHandler.kt",
+    "lawnchair/src/app/lawnchair/gestures/handlers/SleepGestureHandler.kt",
+    "lawnchair/src/app/lawnchair/overview/LawnchairOverviewActionsView.kt",
+    "lawnchair/src/app/lawnchair/overview/TaskOverlayFactoryImpl.kt",
+    "lawnchair/src/app/lawnchair/overview/TaskShortcutFactory.kt",
+    "lawnchair/src/app/lawnchair/root/**",
+    "lawnchair/src/app/lawnchair/ui/preferences/destinations/QuickstepPreferences.kt",
+    "lawnchair/src/app/lawnchair/util/LawnchairLockedStateController.kt",
+    "lawnchair/src/app/lawnchair/util/RecentHelper.kt",
+    "lawnchair/src/app/lawnchair/util/TaskUtilLockState.kt",
+    "quickstep/src/com/android/launcher3/uioverrides/touchcontrollers/StatusBarTouchController.java",
+    "res/xml/accessibility_service_config.xml",
+    "res/xml/sleep_policy.xml",
+    "src/com/android/launcher3/model/SdCardAvailableReceiver.java",
+]
+
+def forbiddenManifestEntries = [
+    "AndroidManifest-common.xml": [
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.READ_DEVICE_CONFIG",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.EXPAND_STATUS_BAR",
+        "android.permission.ACCESS_RESTRICTED_SETTINGS",
+        "android.permission.ROTATE_SURFACE_FLINGER",
+        "android.permission.WAKEUP_SURFACE_FLINGER",
+        "android.permission.POST_NOTIFICATIONS",
+        "com.android.launcher3.testing.TestInformationProvider",
+    ],
+    "github/AndroidManifest.xml": [
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+    ],
+    "nightly/AndroidManifest.xml": [
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+    ],
+    "lawnchair/AndroidManifest.xml": [
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.READ_CONTACTS",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_HISTORY_BOOKMARKS",
+        "android.permission.WRITE_HISTORY_BOOKMARKS",
+        "android.permission.INTERACT_ACROSS_USERS",
+        "android.permission.INTERACT_ACROSS_USERS_FULL",
+        "android.permission.MANAGE_USERS",
+        "android.permission.FORCE_STOP_PACKAGES",
+        "android.permission.STATUS_BAR_SERVICE",
+        "android.permission.SUSPEND_APPS",
+        "app.lawnchair.gestures.handlers.SleepMethodDeviceAdmin",
+        "app.lawnchair.LawnchairAccessibilityService",
+        "app.lawnchair.bugreport.BugReportReceiver",
+        "app.lawnchair.bugreport.UploaderService",
+    ],
+    "quickstep/AndroidManifest.xml": [
+        "android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS",
+        "android.permission.CONTROL_REMOTE_APP_TRANSITION_ANIMATIONS",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.START_TASKS_FROM_RECENTS",
+        "android.permission.REMOVE_TASKS",
+        "android.permission.WRITE_SECURE_SETTINGS",
+        "android.permission.MANAGE_ACTIVITY_TASKS",
+        "android.permission.INTERNAL_SYSTEM_WINDOW",
+        "android.permission.STATUS_BAR",
+        "android.permission.STATUS_BAR_SERVICE",
+        "android.permission.STOP_APP_SWITCHES",
+        "android.permission.SET_ORIENTATION",
+        "android.permission.READ_FRAME_BUFFER",
+        "android.permission.MANAGE_ACCESSIBILITY",
+        "android.permission.MONITOR_INPUT",
+        "android.permission.ALLOW_SLIPPERY_TOUCHES",
+        "android.permission.ACCESS_SHORTCUTS",
+        "android.permission.SYSTEM_APPLICATION_OVERLAY",
+        "android.permission.ACCESS_HIDDEN_PROFILES_FULL",
+        "android.permission.ACCESS_HIDDEN_PROFILES",
+        "permission.START_WIDGET_PICKER_ACTIVITY",
+        "com.android.quickstep.TouchInteractionService",
+        "com.android.quickstep.LauncherSearchIndexablesProvider",
+        "com.android.quickstep.interaction.GestureSandboxActivity",
+        "com.android.quickstep.interaction.AllSetActivity",
+        "com.android.launcher3.WidgetPickerActivity",
+    ],
+    "systemUI/viewcapture/AndroidManifest.xml": [
+        "android.permission.WRITE_SECURE_SETTINGS",
+    ],
+    "wmshell/AndroidManifest.xml": [
+        "android.permission.CAPTURE_BLACKOUT_CONTENT",
+        "android.permission.INTERACT_ACROSS_USERS_FULL",
+        "android.permission.ROTATE_SURFACE_FLINGER",
+        "android.permission.WAKEUP_SURFACE_FLINGER",
+        "android.permission.READ_FRAME_BUFFER",
+    ],
+]
+
+def forbiddenBuildEntries = [
+    "build.gradle": [
+        "libs.plugins.cash.licensee",
+        "libs.libsu",
+    ],
+    "gradle/libs.versions.toml": [
+        "app.cash.licensee",
+        "com.github.topjohnwu.libsu",
+        "libsu-core",
+        "libsu-service",
+    ],
+]
+
+def forbiddenSources = fileTree(repositoryRoot) {
+    include forbiddenSourcePatterns
+}
+def inspectedFiles = (forbiddenManifestEntries.keySet() + forbiddenBuildEntries.keySet())
+    .collect { new File(repositoryRoot, it) }
+
+def verifyPlayCompliance = tasks.register("verifyPlayCompliance") {
+    group = "verification"
+    description = "Fails when a Play-sensitive source, manifest entry, or dependency is restored."
+    inputs.files(forbiddenSources)
+    inputs.files(inspectedFiles)
+
+    doLast {
+        def violations = []
+        forbiddenSources.files.sort().each { file ->
+            violations += "forbidden source exists: ${repositoryRoot.toPath().relativize(file.toPath())}"
+        }
+
+        forbiddenManifestEntries.each { relativePath, entries ->
+            def manifest = new File(repositoryRoot, relativePath)
+            if (!manifest.exists()) return
+            def manifestText = manifest.getText("UTF-8")
+            entries.each { entry ->
+                if (manifestText.contains(entry)) {
+                    violations += "forbidden manifest entry '${entry}' in ${relativePath}"
+                }
+            }
+        }
+
+        forbiddenBuildEntries.each { relativePath, entries ->
+            def buildFile = new File(repositoryRoot, relativePath)
+            if (!buildFile.exists()) return
+            def buildText = buildFile.getText("UTF-8")
+            entries.each { entry ->
+                if (buildText.contains(entry)) {
+                    violations += "forbidden build dependency '${entry}' in ${relativePath}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "Play compliance verification failed. Sensitive capabilities must be physically removed:\n" +
+                    violations.collect { " - ${it}" }.join("\n"),
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(verifyPlayCompliance)
+}

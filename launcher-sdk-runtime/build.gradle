@@ -1,0 +1,68 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    id "maven-publish"
+}
+
+def sdkPublishGroup = providers.environmentVariable("GROUP")
+    .orElse(providers.gradleProperty("PUBLISH_GROUP"))
+    .orElse("app.lawnchair")
+def sdkPublishVersion = providers.environmentVariable("VERSION")
+    .orElse(providers.gradleProperty("PUBLISH_VERSION"))
+    .orElse("0.1.0-local")
+
+android {
+    namespace "app.lawnchair.sdk.runtime"
+
+    defaultConfig {
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+}
+
+dependencies {
+    api projects.launcherSdkApi
+    implementation libs.kotlinx.coroutines.android
+    testImplementation "junit:junit:4.13.2"
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register("release", MavenPublication) {
+                groupId = sdkPublishGroup.get()
+                artifactId = "launcher-sdk-runtime"
+                version = sdkPublishVersion.get()
+                from components.release
+
+                pom {
+                    name = "Lawnchair SDK Runtime"
+                    description = "Launcher-independent controllers and ports for Lawnchair SDK integrations."
+                    url = "https://github.com/vihuela/lawnchair-sdk"
+
+                    licenses {
+                        license {
+                            name = "Apache License, Version 2.0"
+                            url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                        }
+                    }
+
+                    scm {
+                        url = "https://github.com/vihuela/lawnchair-sdk"
+                        connection = "scm:git:https://github.com/vihuela/lawnchair-sdk.git"
+                        developerConnection = "scm:git:ssh://git@github.com/vihuela/lawnchair-sdk.git"
+                    }
+                }
+            }
+        }
+    }
+}

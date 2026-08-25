@@ -1,6 +1,5 @@
 package app.lawnchair.sdk.api
 
-import android.content.Context
 import android.content.Intent
 import androidx.annotation.DrawableRes
 
@@ -9,14 +8,15 @@ interface DesktopItemsExtension {
      * Returns the complete desired desktop state. [DesktopItemsSnapshot.Unavailable] keeps the
      * last applied state unchanged and should be used while data is loading or temporarily failed.
      */
-    fun getSnapshot(context: Context): DesktopItemsSnapshot
+    suspend fun getSnapshot(): DesktopItemsSnapshot
 
-    fun onAction(
-        context: Context,
-        itemId: String,
-        actionId: String,
-    ) = Unit
+    suspend fun onAction(event: DesktopItemActionEvent) = Unit
 }
+
+data class DesktopItemActionEvent(
+    val itemId: String,
+    val actionId: String,
+)
 
 sealed interface DesktopItemsSnapshot {
     data class Ready(val items: List<DesktopItemSpec>) : DesktopItemsSnapshot

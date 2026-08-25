@@ -42,9 +42,9 @@ import app.lawnchair.gestures.VerticalSwipeTouchController
 import app.lawnchair.gestures.config.GestureHandlerConfig
 import app.lawnchair.preferences.PreferenceManager
 import app.lawnchair.preferences2.PreferenceManager2
+import app.lawnchair.sdk.LawnchairSdkHooks
 import app.lawnchair.sdk.LawnchairSdkRegistry
 import app.lawnchair.sdk.MinusOneCoordinator
-import app.lawnchair.sdk.SdkDesktopItemsSynchronizer
 import app.lawnchair.sdk.SdkDesktopVisibilityReporter
 import app.lawnchair.theme.ThemeProvider
 import app.lawnchair.ui.popup.LauncherOptionsPopup
@@ -474,7 +474,7 @@ class LawnchairLauncher : QuickstepLauncher() {
         val modelLoaded = LauncherAppState.getInstance(this).model.isModelLoaded
         if (!modelLoaded) return
         hasSyncedSdkDesktopItems = true
-        SdkDesktopItemsSynchronizer.refresh(this)
+        LawnchairSdkHooks.onLauncherModelReady(this)
     }
 
     internal fun getMinusOneCoordinator(): MinusOneCoordinator = minusOneCoordinator

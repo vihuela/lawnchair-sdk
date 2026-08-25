@@ -1,11 +1,11 @@
-package app.lawnchair.sdk
+package app.lawnchair.sdk.runtime
 
 import app.lawnchair.sdk.api.DesktopItemConflictPolicy
 import app.lawnchair.sdk.api.DesktopItemPlacement
 import app.lawnchair.sdk.api.DesktopItemRowAnchor
 import app.lawnchair.sdk.api.DesktopItemSpec
 
-internal object DesktopItemSpecs {
+object DesktopItemSpecs {
     fun normalize(specs: List<DesktopItemSpec>): List<DesktopItemSpec> {
         val seenIds = hashSetOf<String>()
         return specs.mapNotNull { original ->
@@ -24,9 +24,9 @@ internal object DesktopItemSpecs {
     }
 }
 
-internal data class DesktopCell(val column: Int, val row: Int)
+data class DesktopCell(val column: Int, val row: Int)
 
-internal class DesktopGrid(private val columns: Int, private val rows: Int) {
+class DesktopGrid(private val columns: Int, private val rows: Int) {
     private val occupied = BooleanArray(columns * rows)
 
     fun mark(column: Int, row: Int, spanX: Int = 1, spanY: Int = 1, value: Boolean = true) {
@@ -64,13 +64,13 @@ internal class DesktopGrid(private val columns: Int, private val rows: Int) {
     private fun isVacant(column: Int, row: Int) = !occupied[row * columns + column]
 }
 
-internal data class DesktopReconciliationPlan(
+data class DesktopReconciliationPlan(
     val keptRecordIndexes: Set<Int>,
     val deletedRecordIndexes: Set<Int>,
     val addedIds: Set<String>,
 )
 
-internal object DesktopItemsReconciler {
+object DesktopItemsReconciler {
     fun plan(
         desiredIds: Set<String>,
         removedIds: Set<String>,

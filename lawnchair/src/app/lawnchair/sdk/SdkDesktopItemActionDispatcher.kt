@@ -3,11 +3,13 @@ package app.lawnchair.sdk
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import app.lawnchair.sdk.api.DesktopItemActionEvent
 import app.lawnchair.sdk.api.DesktopItemClickAction
 import app.lawnchair.sdk.api.DesktopItemSpec
 import com.android.launcher3.model.data.ItemInfo
+import kotlinx.coroutines.launch
 
-object SdkDesktopItemActionDispatcher {
+internal object SdkDesktopItemActionDispatcher {
     private const val ACTION_DESKTOP_ITEM_PROVIDER = "app.lawnchair.sdk.action.DESKTOP_ITEM_PROVIDER"
 
     const val EXTRA_DESKTOP_ITEM_ID = "app.lawnchair.sdk.extra.DESKTOP_ITEM_ID"
@@ -43,7 +45,6 @@ object SdkDesktopItemActionDispatcher {
         }
     }
 
-    @JvmStatic
     fun isDragToDeleteAllowed(info: ItemInfo?): Boolean {
         val intent = info?.intent ?: return true
         if (!intent.hasExtra(EXTRA_DESKTOP_ITEM_ID)) {
@@ -52,11 +53,7 @@ object SdkDesktopItemActionDispatcher {
         return intent.getBooleanExtra(EXTRA_DESKTOP_ITEM_ALLOW_DRAG_TO_DELETE, true)
     }
 
-    @JvmStatic
-    fun dispatchIfNeeded(
-        context: Context,
-        intent: Intent?,
-    ): Boolean {
+    fun dispatchIfNeeded(intent: Intent?): Boolean {
         if (intent == null) return false
         val actionKind = intent.getStringExtra(EXTRA_DESKTOP_ITEM_ACTION_KIND)
             ?: when (intent.action) {
@@ -64,26 +61,21 @@ object SdkDesktopItemActionDispatcher {
                 else -> return false
             }
         return when (actionKind) {
-            ACTION_KIND_PROVIDER -> dispatchProviderAction(context, intent)
+            ACTION_KIND_PROVIDER -> dispatchProviderAction(intent)
             else -> false
         }
     }
 
-    private fun dispatchProviderAction(
-        context: Context,
-        intent: Intent,
-    ): Boolean {
+    private fun dispatchProviderAction(intent: Intent): Boolean {
         val itemId = intent.getStringExtra(EXTRA_DESKTOP_ITEM_ID).orEmpty()
         val actionId = intent.getStringExtra(EXTRA_DESKTOP_ITEM_ACTION_ID).orEmpty()
         if (itemId.isBlank() || actionId.isBlank()) return false
         val extension = LawnchairSdkRegistry.desktopItems ?: return true
-        runCatching {
-            extension.onAction(
-                context = context,
-                itemId = itemId,
-                actionId = actionId,
-            )
-        }.onFailure { Log.e(TAG, "Desktop item action callback failed", it) }
+        LawnchairSdkScope.launch {
+            runCatching {
+                extension.onAction(DesktopItemActionEvent(itemId = itemId, actionId = actionId))
+            }.onFailure { Log.e(TAG, "Desktop item action callback failed", it) }
+        }
         return true
     }
 

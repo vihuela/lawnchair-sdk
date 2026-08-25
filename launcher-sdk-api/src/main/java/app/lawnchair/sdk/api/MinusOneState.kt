@@ -16,14 +16,3 @@ enum class MinusOneAnimation {
     Animated,
     Immediate,
 }
-
-enum class LawnchairOperationResult {
-    Accepted,
-    AlreadyInRequestedState,
-    ContentUnavailable,
-    DisabledByUser,
-    LauncherNotReady,
-    DataUnavailable,
-    InvalidItemId,
-    RuntimeUnavailable,
-}

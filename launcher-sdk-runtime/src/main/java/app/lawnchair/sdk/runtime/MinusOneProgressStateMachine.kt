@@ -1,9 +1,9 @@
-package app.lawnchair.sdk
+package app.lawnchair.sdk.runtime
 
 import app.lawnchair.sdk.api.MinusOnePhase
 import app.lawnchair.sdk.api.MinusOneState
 
-internal class MinusOneProgressStateMachine {
+class MinusOneProgressStateMachine {
     var state: MinusOneState = MinusOneState(MinusOnePhase.Closed, 0f)
         private set
 
@@ -23,7 +23,7 @@ internal class MinusOneProgressStateMachine {
     }
 }
 
-internal object MinusOneGeometry {
+object MinusOneGeometry {
     fun translationX(progress: Float, width: Float, isRtl: Boolean): Float {
         val direction = if (isRtl) 1f else -1f
         return direction * width * (1f - progress.coerceIn(0f, 1f))

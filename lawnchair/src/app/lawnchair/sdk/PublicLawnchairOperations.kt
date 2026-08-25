@@ -3,110 +3,92 @@ package app.lawnchair.sdk
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import app.lawnchair.LawnchairApp
 import app.lawnchair.LawnchairLauncher
-import app.lawnchair.sdk.api.LawnchairOperationResult
+import app.lawnchair.sdk.api.LauncherCommand
+import app.lawnchair.sdk.api.LauncherCommandResult
+import app.lawnchair.sdk.api.LauncherEvent
+import app.lawnchair.sdk.api.LauncherFailureReason
+import app.lawnchair.sdk.api.LauncherRejectReason
+import app.lawnchair.sdk.api.LauncherStateSnapshot
 import app.lawnchair.sdk.api.MinusOneAnimation
-import app.lawnchair.sdk.api.MinusOneState
 import app.lawnchair.sdk.internal.LawnchairOperationsDelegate
 import app.lawnchair.sdk.internal.LawnchairSdkRuntimeBridge
-import com.android.launcher3.util.Executors
-import java.util.concurrent.FutureTask
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 
 internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
+    override val state: StateFlow<LauncherStateSnapshot> = LawnchairRuntimeSignals.state
+
+    override val events: Flow<LauncherEvent> = LawnchairRuntimeSignals.events
+
+    override suspend fun execute(command: LauncherCommand): LauncherCommandResult {
+        val context = LawnchairApp.application
+        return when (command) {
+            LauncherCommand.LaunchDesktop -> runActivityCommand { launchDesktop(context) }
+
+            is LauncherCommand.OpenMinusOne -> executeMinusOneOpen(context, command.animation)
+
+            is LauncherCommand.CloseMinusOne -> executeMinusOneClose(command.animation)
+
+            is LauncherCommand.ToggleMinusOne -> executeMinusOneToggle(context, command.animation)
+
+            LauncherCommand.RefreshDesktopItems -> executeOnMain {
+                SdkDesktopItemsSynchronizer.refreshAsync(context)
+            }
+
+            is LauncherCommand.RemoveDesktopItem -> executeOnMain {
+                SdkDesktopItemsSynchronizer.removeItemAsync(
+                    context,
+                    command.itemId,
+                    command.rememberRemoval,
+                )
+            }
+
+            is LauncherCommand.RestoreDesktopItem -> executeOnMain {
+                SdkDesktopItemsSynchronizer.restoreItemAsync(context, command.itemId)
+            }
+
+            LauncherCommand.RequestDefaultLauncher -> runActivityCommand {
+                requestSetDefaultLauncher(context)
+            }
+
+            LauncherCommand.OpenHomeSettings -> runActivityCommand { openHomeSettings(context) }
+
+            LauncherCommand.OpenLauncherAppInfo -> runActivityCommand {
+                openLauncherAppInfo(context)
+            }
+        }
+    }
+
     override fun isDefaultLauncher(context: Context): Boolean {
         val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val homeActivity = context.packageManager.resolveActivity(homeIntent, 0)?.activityInfo
         return homeActivity?.packageName == context.packageName
     }
 
-    override fun launchDesktop(context: Context) {
+    private fun launchDesktop(context: Context) {
         context.startActivity(
             Intent(context, LawnchairLauncher::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
         )
     }
 
-    override fun getMinusOneState(): MinusOneState? {
-        val launcher = LawnchairLauncher.instance ?: return null
-        return onMainThread { launcher.getMinusOneCoordinator().getState() }
-    }
-
-    override fun openMinusOne(
-        context: Context,
-        animation: MinusOneAnimation,
-    ): LawnchairOperationResult {
-        val launcher = LawnchairLauncher.instance
-        if (launcher != null) {
-            return onMainThread { launcher.getMinusOneCoordinator().requestOpen(animation) }
-                ?: LawnchairOperationResult.RuntimeUnavailable
-        }
-        return runCatching {
-            context.startActivity(
-                Intent(context, LawnchairLauncher::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    .putExtra(LawnchairLauncher.EXTRA_OPEN_MINUS_ONE, true)
-                    .putExtra(LawnchairLauncher.EXTRA_MINUS_ONE_ANIMATION, animation.name),
-            )
-            LawnchairOperationResult.Accepted
-        }.onFailure { Log.e(TAG, "Unable to launch minus-one", it) }
-            .getOrDefault(LawnchairOperationResult.RuntimeUnavailable)
-    }
-
-    override fun closeMinusOne(
-        context: Context,
-        animation: MinusOneAnimation,
-    ): LawnchairOperationResult {
-        val launcher = LawnchairLauncher.instance ?: return LawnchairOperationResult.LauncherNotReady
-        return onMainThread { launcher.getMinusOneCoordinator().requestClose(animation) }
-            ?: LawnchairOperationResult.RuntimeUnavailable
-    }
-
-    override fun toggleMinusOne(
-        context: Context,
-        animation: MinusOneAnimation,
-    ): LawnchairOperationResult {
-        val launcher = LawnchairLauncher.instance
-        if (launcher != null) {
-            return onMainThread { launcher.getMinusOneCoordinator().toggle(animation) }
-                ?: LawnchairOperationResult.RuntimeUnavailable
-        }
-        return openMinusOne(context, animation)
-    }
-
-    override fun refreshDesktopItems(context: Context): LawnchairOperationResult {
-        return SdkDesktopItemsSynchronizer.refresh(context)
-    }
-
-    override fun removeDesktopItem(
-        context: Context,
-        itemId: String,
-        rememberRemoval: Boolean,
-    ): LawnchairOperationResult {
-        return SdkDesktopItemsSynchronizer.removeItem(context, itemId, rememberRemoval)
-    }
-
-    override fun restoreDesktopItem(
-        context: Context,
-        itemId: String,
-    ): LawnchairOperationResult {
-        return SdkDesktopItemsSynchronizer.restoreItem(context, itemId)
-    }
-
-    override fun requestSetDefaultLauncher(context: Context) {
+    private fun requestSetDefaultLauncher(context: Context) {
         openHomeSettings(context)
     }
 
-    override fun openHomeSettings(context: Context) {
+    private fun openHomeSettings(context: Context) {
         context.startActivity(
             Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 
-    override fun openLauncherAppInfo(context: Context) {
+    private fun openLauncherAppInfo(context: Context) {
         context.startActivity(
             Intent(
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -115,16 +97,87 @@ internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
         )
     }
 
-    private fun <T> onMainThread(block: () -> T): T? {
-        return runCatching {
-            if (Looper.myLooper() == Looper.getMainLooper()) return@runCatching block()
-            val task = FutureTask(block)
-            Executors.MAIN_EXECUTOR.execute(task)
-            task.get(MAIN_THREAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        }.onFailure { Log.e(TAG, "Launcher operation failed", it) }.getOrNull()
+    private suspend fun executeMinusOneOpen(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): LauncherCommandResult {
+        val launcher = LawnchairLauncher.instance
+        if (launcher != null) {
+            return executeOnMain {
+                launcher.getMinusOneCoordinator().requestOpenCommand(animation)
+            }
+        }
+        return executeOnMain {
+            runCatching {
+                context.startActivity(createOpenMinusOneIntent(context, animation))
+            }.fold(
+                onSuccess = { LauncherCommandResult.Queued },
+                onFailure = {
+                    LauncherCommandResult.Failed(
+                        LauncherFailureReason.ActivityLaunchFailed,
+                        it.message,
+                    )
+                },
+            )
+        }
     }
 
-    private const val MAIN_THREAD_TIMEOUT_SECONDS = 5L
+    private suspend fun executeMinusOneClose(
+        animation: MinusOneAnimation,
+    ): LauncherCommandResult {
+        val launcher = LawnchairLauncher.instance
+            ?: return LauncherCommandResult.Rejected(LauncherRejectReason.LauncherNotReady)
+        return executeOnMain {
+            launcher.getMinusOneCoordinator().requestCloseCommand(animation)
+        }
+    }
+
+    private suspend fun executeMinusOneToggle(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): LauncherCommandResult {
+        val launcher = LawnchairLauncher.instance
+            ?: return executeMinusOneOpen(context, animation)
+        return executeOnMain {
+            launcher.getMinusOneCoordinator().toggleCommand(animation)
+        }
+    }
+
+    private suspend fun executeOnMain(
+        block: suspend () -> LauncherCommandResult,
+    ): LauncherCommandResult {
+        return runCatching { withContext(Dispatchers.Main.immediate) { block() } }
+            .getOrElse {
+                Log.e(TAG, "Launcher command failed", it)
+                LauncherCommandResult.Failed(LauncherFailureReason.RuntimeUnavailable, it.message)
+            }
+    }
+
+    private suspend fun runActivityCommand(block: () -> Unit): LauncherCommandResult {
+        return executeOnMain {
+            runCatching(block)
+                .fold(
+                    onSuccess = { LauncherCommandResult.Applied },
+                    onFailure = {
+                        LauncherCommandResult.Failed(
+                            LauncherFailureReason.ActivityLaunchFailed,
+                            it.message,
+                        )
+                    },
+                )
+        }
+    }
+
+    private fun createOpenMinusOneIntent(
+        context: Context,
+        animation: MinusOneAnimation,
+    ): Intent {
+        return Intent(context, LawnchairLauncher::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(LawnchairLauncher.EXTRA_OPEN_MINUS_ONE, true)
+            .putExtra(LawnchairLauncher.EXTRA_MINUS_ONE_ANIMATION, animation.name)
+    }
+
     private const val TAG = "LawnchairOperations"
 }
 

@@ -1,4 +1,4 @@
-package app.lawnchair.sdk
+package app.lawnchair.sdk.runtime
 
 import app.lawnchair.sdk.api.DesktopItemClickAction
 import app.lawnchair.sdk.api.DesktopItemPlacement

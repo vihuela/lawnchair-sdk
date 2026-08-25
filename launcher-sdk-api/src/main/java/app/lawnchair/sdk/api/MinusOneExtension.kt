@@ -9,8 +9,6 @@ interface MinusOneExtension {
 
     @Composable
     fun Content(scope: MinusOneScope, modifier: Modifier = Modifier)
-
-    fun onStateChanged(state: MinusOneState) = Unit
 }
 
 enum class MinusOneLaunchPolicy {
@@ -21,5 +19,5 @@ enum class MinusOneLaunchPolicy {
 interface MinusOneScope {
     val state: MinusOneState
 
-    fun close(animation: MinusOneAnimation = MinusOneAnimation.Animated): LawnchairOperationResult
+    fun close(animation: MinusOneAnimation = MinusOneAnimation.Animated): LauncherCommandResult
 }

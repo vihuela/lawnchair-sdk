@@ -6,7 +6,3 @@ enum class DesktopVisibleSource {
     AllAppsReturn,
     OtherUiReturn,
 }
-
-fun interface DesktopVisibleListener {
-    fun onDesktopVisible(source: DesktopVisibleSource)
-}

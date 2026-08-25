@@ -39,8 +39,7 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Toast;
 
-import app.lawnchair.sdk.SdkDesktopItemActionDispatcher;
-import app.lawnchair.sdk.SdkLauncherIconClickDispatcher;
+import app.lawnchair.sdk.LawnchairSdkHooks;
 
 import com.android.launcher3.BubbleTextView;
 import com.android.launcher3.Flags;
@@ -413,12 +412,11 @@ public class ItemClickHandler {
         if (intent == null) {
             throw new IllegalArgumentException("Input must have a valid intent");
         }
-        SdkLauncherIconClickDispatcher.dispatch(launcher, item);
+        if (LawnchairSdkHooks.onItemClick(launcher, item, intent)) {
+            return;
+        }
         if (item instanceof WorkspaceItemInfo) {
             WorkspaceItemInfo si = (WorkspaceItemInfo) item;
-            if (SdkDesktopItemActionDispatcher.dispatchIfNeeded(launcher, intent)) {
-                return;
-            }
             if (si.hasStatusFlag(WorkspaceItemInfo.FLAG_SUPPORTS_WEB_UI)
                     && Intent.ACTION_VIEW.equals(intent.getAction())) {
                 // make a copy of the intent that has the package set to null

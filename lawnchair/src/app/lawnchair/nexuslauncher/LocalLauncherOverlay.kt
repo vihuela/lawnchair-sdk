@@ -12,9 +12,9 @@ import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.lawnchair.LawnchairLauncher
-import app.lawnchair.sdk.MinusOneGeometry
-import app.lawnchair.sdk.MinusOneProgressStateMachine
 import app.lawnchair.sdk.api.MinusOneState
+import app.lawnchair.sdk.runtime.MinusOneGeometry
+import app.lawnchair.sdk.runtime.MinusOneProgressStateMachine
 import com.android.launcher3.InsettableFrameLayout
 import com.android.launcher3.R
 import com.android.launcher3.Utilities

@@ -14,6 +14,8 @@ plugins {
     id "maven-publish"
 }
 
+apply from: "play-compliance.gradle"
+
 def launcherMinSdk = 26
 def launcherTargetSdk = 35
 def launcherApplicationId = "app.lawnchair"
@@ -42,6 +44,7 @@ android {
         buildConfigField "String", "COMMIT_HASH", "\"${launcherCommitHash}\""
         buildConfigField "int", "QUICKSTEP_MIN_SDK", "${launcherMinSdk}"
         buildConfigField "int", "QUICKSTEP_MAX_SDK", "${launcherTargetSdk}"
+        buildConfigField "int", "LAUNCHER_PLATFORM_VERSION", "${LAUNCHER_PLATFORM_VERSION}"
         consumerProguardFiles "consumer-rules.pro"
     }
 
@@ -147,10 +150,11 @@ tasks.withType(KotlinCompile).configureEach {
     }
 }
 
-addFrameworkJar('framework-15.jar')
+addFrameworkJar(FRAMEWORK_JAR)
 
 dependencies {
     api projects.launcherSdkApi
+    api projects.launcherSdkRuntime
 
     implementation projects.iconloaderlib
     implementation projects.searchuilib
@@ -175,9 +179,9 @@ dependencies {
     compileOnly projects.plugin
     compileOnly projects.common
 
-    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: 'SystemUI-statsd-15.jar')
-    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: 'WindowManager-Shell-15.jar')
-    compileOnly fileTree(dir: "$rootDir/prebuilts/libs", include: 'framework-15.jar')
+    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: SYSTEM_UI_STATSD_JAR)
+    implementation fileTree(dir: "$rootDir/prebuilts/libs", include: WINDOW_MANAGER_SHELL_JAR)
+    compileOnly fileTree(dir: "$rootDir/prebuilts/libs", include: FRAMEWORK_JAR)
 
     coreLibraryDesugaring libs.android.desugarJdkLibs
 
@@ -208,7 +212,6 @@ dependencies {
     implementation libs.androidx.slice.core
     implementation libs.bundles.accompanist
 
-    testImplementation "junit:junit:4.13.2"
     implementation libs.google.material
     implementation libs.material.motion.compose
     implementation libs.kdrag0n.colorkt
