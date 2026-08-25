@@ -37,6 +37,10 @@ internal object SdkDesktopItemsSynchronizer {
     }
 
     fun onLauncherStarted(context: Context) {
+        requestRefresh(context)
+    }
+
+    fun requestRefresh(context: Context) {
         LawnchairSdkScope.launch {
             when (val result = refreshAsync(context)) {
                 is LauncherCommandResult.Failed -> {

@@ -35,7 +35,7 @@ This repository is not a vanilla upstream Lawnchair checkout. The `feature/sdk-1
 | Upstream branch family | `15-dev`, `15-beta` |
 | Shared merge-base used by this SDK branch | `ae80519238` (`docs: Update changelog`) |
 | First SDK-side customization checkpoint | `854f2c036a` (`裁剪系统权限、一般app无关权限`) |
-| Current SDK release line | `v0.1.x` |
+| Current SDK release line | `v0.2.x` |
 
 ### Why this fork exists
 

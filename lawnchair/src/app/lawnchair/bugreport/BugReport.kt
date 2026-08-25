@@ -55,7 +55,10 @@ data class BugReport(
             }
             type = "text/plain"
         }
-        return Intent.createChooser(sendIntent, context.getText(R.string.lawnchair_bug_report))
+        return Intent.createChooser(
+            sendIntent,
+            context.getString(R.string.launcher_bug_report),
+        )
     }
 
     companion object {

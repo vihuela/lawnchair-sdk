@@ -32,6 +32,10 @@ internal object LawnchairRuntimeSignals {
         mutableState.update { it.copy(minusOne = state) }
     }
 
+    fun onApplicationLanguageChanged(languageTag: String?) {
+        mutableState.update { it.copy(applicationLanguageTag = languageTag) }
+    }
+
     fun onDesktopVisible(source: DesktopVisibleSource) {
         mutableEvents.tryEmit(LauncherEvent.DesktopVisible(source))
     }

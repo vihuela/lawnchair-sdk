@@ -62,6 +62,10 @@ internal object PublicLawnchairOperations : LawnchairOperationsDelegate {
             LauncherCommand.OpenLauncherAppInfo -> runActivityCommand {
                 openLauncherAppInfo(context)
             }
+
+            is LauncherCommand.SetApplicationLanguage -> executeOnMain {
+                ApplicationLanguageAdapter.setLanguage(context, command.languageTag)
+            }
         }
     }
 

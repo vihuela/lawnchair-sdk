@@ -31,6 +31,7 @@ import androidx.core.content.FileProvider
 import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
 import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.sdk.ApplicationLanguageAdapter
 import app.lawnchair.sdk.LawnchairSdkApiInitializer
 import app.lawnchair.sdk.LawnchairSdkLoader
 import app.lawnchair.util.restartLauncher
@@ -52,6 +53,7 @@ open class LawnchairApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        ApplicationLanguageAdapter.initialize(this)
         LawnchairSdkApiInitializer.install()
         LawnchairSdkLoader.load(this)
         QuickStepContract.sRecentsDisabled = !recentsEnabled
@@ -126,6 +128,12 @@ open class LawnchairApp : Application() {
 
         fun finishAll() {
             HashSet(activities).forEach { it.finish() }
+        }
+
+        fun recreateAll() {
+            HashSet(activities).forEach { activity ->
+                if (!activity.isDestroyed && !activity.isChangingConfigurations) activity.recreate()
+            }
         }
 
         override fun onActivityPaused(activity: Activity) {}
@@ -208,6 +216,15 @@ open class LawnchairApp : Application() {
                 instance.restart(recreateLauncher)
             } else {
                 LawnchairHostRuntime.restart(recreateLauncher)
+            }
+        }
+
+        @JvmStatic
+        fun recreateActivitiesCompat() {
+            if (::instance.isInitialized) {
+                instance.activityHandler.recreateAll()
+            } else {
+                LawnchairHostRuntime.recreateActivities()
             }
         }
 

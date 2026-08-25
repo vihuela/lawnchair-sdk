@@ -11,6 +11,7 @@ import android.util.Log
 import app.lawnchair.backup.LawnchairBackup
 import app.lawnchair.flowerpot.Flowerpot
 import app.lawnchair.preferences.PreferenceManager
+import app.lawnchair.sdk.ApplicationLanguageAdapter
 import app.lawnchair.sdk.LawnchairSdkApiInitializer
 import app.lawnchair.sdk.LawnchairSdkLoader
 import app.lawnchair.util.restartLauncher
@@ -40,6 +41,12 @@ object LawnchairHostRuntime {
 
         fun finishAll() {
             HashSet(activities).forEach { it.finish() }
+        }
+
+        fun recreateAll() {
+            HashSet(activities).forEach { activity ->
+                if (!activity.isDestroyed && !activity.isChangingConfigurations) activity.recreate()
+            }
         }
 
         override fun onActivityPaused(activity: Activity) {}
@@ -79,6 +86,7 @@ object LawnchairHostRuntime {
         }
 
         LawnchairSdkApiInitializer.install()
+        ApplicationLanguageAdapter.initialize(application)
         LawnchairSdkLoader.load(application)
         QuickStepContract.sRecentsDisabled = !computedRecentsEnabled
         Flowerpot.Manager.getInstance(application)
@@ -107,6 +115,10 @@ object LawnchairHostRuntime {
         } else {
             restartLauncher(requireApplication())
         }
+    }
+
+    fun recreateActivities() {
+        activityHandler.recreateAll()
     }
 
     fun renameRestoredDb(dbName: String) {

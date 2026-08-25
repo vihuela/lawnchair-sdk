@@ -17,9 +17,8 @@
     <!-- Miscellaneous -->
     <bool name="config_largeHeap">false</bool>
 
-    <!-- A string pointer to the original app name string. This allows derived projects to
-     easily override the app name without providing all translations -->
-    <string name="derived_app_name" translatable="false">@string/app_name</string>
+    <!-- Product name shown by launcher-core and its settings UI. -->
+    <string name="derived_app_name" translatable="false">Launcher</string>
 
     <!-- String representing the intent to delete a package.-->
     <string name="delete_package_intent" translatable="false">#Intent;action=android.intent.action.DELETE;launchFlags=0x10800000;end</string>

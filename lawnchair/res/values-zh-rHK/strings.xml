@@ -15,6 +15,10 @@
   ~ limitations under the License.
   -->
 <resources xmlns:tools="http://schemas.android.com/tools" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="managed_by_launcher">由 Launcher 管理</string>
+    <string name="restart_launcher">重新啟動 Launcher</string>
+    <string name="smartspace_launcher_widget_toggle_description">放置 Launcher 小工具即可手動將資訊一覽新增至主畫面</string>
+    <string name="launcher_bug_report">回報 Launcher 問題</string>
     <string name="generic_smartspace_concatenated_desc">%1$s，%2$s</string>
     <string name="accessibility_smartspace_page">第 %1$d 頁，總共有 %2$d 頁</string>
 </resources>

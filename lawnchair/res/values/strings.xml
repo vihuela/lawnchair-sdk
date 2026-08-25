@@ -74,6 +74,7 @@
     <string name="time_years_ago">%dy</string>
 
     <string name="managed_by_lawnchair">Managed by Lawnchair</string>
+    <string name="managed_by_launcher">Managed by Launcher</string>
 
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">Preferences</string>
@@ -197,6 +198,7 @@
 
     <string name="app_info_drop_target_label">App info</string>
     <string name="debug_restart_launcher">Restart Lawnchair</string>
+    <string name="restart_launcher">Restart Launcher</string>
     <string name="experimental_features_label">Experimental features</string>
 
     <!-- Experimental features -->
@@ -457,10 +459,11 @@
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">Show on home screen</string>
     <string name="smartspace_widget_toggle_description">At a Glance can be manually added to the home screen by placing the Lawnchair widget</string>
+    <string name="smartspace_launcher_widget_toggle_description">At a Glance can be manually added to the home screen by placing the Launcher widget</string>
 
     <!-- List of available providers -->
     <string name="smartspace_mode_label">At a Glance provider</string>
-    <string name="smartspace_mode_lawnchair" translatable="false">Lawnchair</string>
+    <string name="smartspace_mode_lawnchair" translatable="false">Launcher</string>
     <string name="smartspace_mode_google">Google</string>
     <string name="smartspace_mode_google_search">Google Search</string>
     <string name="smartspace_mode_smartspacer" translatable="false">Smartspacer</string>
@@ -562,6 +565,7 @@
 
     -->
     <string name="lawnchair_bug_report">Lawnchair bug report</string>
+    <string name="launcher_bug_report">Launcher bug report</string>
     <string name="crash_report_notif_title">%1$s crashed</string>
     <string name="action_upload_crash_report">Upload crash log</string>
 
@@ -649,7 +653,7 @@
     <string name="search_bar_settings">Search bar settings</string>
     <string name="hotseat_mode_label">Search bar widget</string>
     <string name="hotseat_mode_disabled">Disabled</string>
-    <string name="hotseat_mode_lawnchair" translatable="false">Lawnchair</string>
+    <string name="hotseat_mode_lawnchair" translatable="false">Launcher</string>
     <string name="hotseat_mode_google_search">Google Search bar</string>
 
     <string name="qsb_hotseat_background_transparency">Background opacity</string>

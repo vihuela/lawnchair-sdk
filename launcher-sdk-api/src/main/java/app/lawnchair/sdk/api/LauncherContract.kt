@@ -29,6 +29,14 @@ sealed interface LauncherCommand {
     data object OpenHomeSettings : LauncherCommand
 
     data object OpenLauncherAppInfo : LauncherCommand
+
+    /**
+     * Changes the language used by the host application and Launcher UI.
+     *
+     * [languageTag] must be a single BCP 47 language tag, for example `zh-CN`, `en`, or `ja`.
+     * Pass `null` to follow the system language again.
+     */
+    data class SetApplicationLanguage(val languageTag: String?) : LauncherCommand
 }
 
 sealed interface LauncherCommandResult {
@@ -60,6 +68,7 @@ enum class LauncherRejectReason {
     LauncherNotReady,
     DataUnavailable,
     InvalidItemId,
+    InvalidLanguageTag,
 }
 
 enum class LauncherFailureReason {
@@ -73,6 +82,8 @@ data class LauncherStateSnapshot(
     val runtimeAvailable: Boolean,
     /** AOSP adapter family used by the installed runtime, for example 15 or 16. */
     val platformAdapterVersion: Int? = null,
+    /** The normalized BCP 47 application language tag, or `null` when following the system. */
+    val applicationLanguageTag: String? = null,
     val minusOne: MinusOneState = MinusOneState(MinusOnePhase.Closed, 0f),
 )
 

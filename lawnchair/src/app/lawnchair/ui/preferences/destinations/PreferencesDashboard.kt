@@ -82,7 +82,7 @@ fun PreferencesDashboard(
     val pref2 = preferenceManager2()
 
     PreferenceLayout(
-        label = stringResource(id = R.string.settings),
+        label = stringResource(id = R.string.derived_app_name),
         modifier = modifier,
         verticalArrangement = Arrangement.Top,
         backArrowVisible = false,
@@ -252,7 +252,7 @@ fun RowScope.PreferencesOverflowMenu(
                 hideMenu()
             },
             text = {
-                Text(text = stringResource(id = R.string.debug_restart_launcher))
+                Text(text = stringResource(id = R.string.restart_launcher))
             },
         )
         DropdownMenuItem(
@@ -327,7 +327,10 @@ fun PreferencesSetDefaultLauncherWarning(
             title = {},
             description = {
                 Text(
-                    text = stringResource(id = R.string.set_default_launcher_tip),
+                    text = stringResource(
+                        id = R.string.set_default_home_app,
+                        stringResource(id = R.string.derived_app_name),
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },

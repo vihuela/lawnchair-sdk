@@ -65,7 +65,8 @@ fun SmartspacePreferences(
             MainSwitchPreference(
                 adapter = smartspaceAdapter,
                 label = stringResource(R.string.smartspace_widget_toggle_label),
-                description = stringResource(id = R.string.smartspace_widget_toggle_description).takeIf { modeIsLawnchair },
+                description = stringResource(id = R.string.smartspace_launcher_widget_toggle_description)
+                    .takeIf { modeIsLawnchair },
             ) {
                 PreferenceGroup {
                     SmartspaceProviderPreference(

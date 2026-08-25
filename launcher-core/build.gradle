@@ -30,7 +30,7 @@ def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse("app.lawnchair")
 def sdkPublishVersion = providers.environmentVariable("VERSION")
     .orElse(providers.gradleProperty("PUBLISH_VERSION"))
-    .orElse("0.1.0-local")
+    .orElse("0.2.0-local")
 
 android {
     namespace "com.android.launcher3"

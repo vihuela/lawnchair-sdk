@@ -62,6 +62,7 @@
     <string name="time_months_ago">%dmo</string>
     <string name="time_years_ago">%dy</string>
     <string name="managed_by_lawnchair">由 Lawnchair 管理</string>
+    <string name="managed_by_launcher">由 Launcher 管理</string>
     <!-- When mentioning settings UI -->
     <string name="smartspace_preferences">首选项</string>
     <string name="settings_button_text">启动器设置</string>
@@ -153,6 +154,7 @@
     <string name="about_label">关于</string>
     <string name="app_info_drop_target_label">应用信息</string>
     <string name="debug_restart_launcher">重启 Lawnchair</string>
+    <string name="restart_launcher">重启 Launcher</string>
     <string name="experimental_features_label">实验性功能</string>
     <!-- Experimental features -->
     <string name="workspace_label">Workspace</string>
@@ -373,6 +375,7 @@
     <!-- Toggle button for enabling Smartspace -->
     <string name="smartspace_widget_toggle_label">在主屏幕显示</string>
     <string name="smartspace_widget_toggle_description">资讯一览可以通过将 Lawnchair 小部件放置在主屏幕上来手动添加</string>
+    <string name="smartspace_launcher_widget_toggle_description">将 Launcher 小部件放置在主屏幕上，即可手动添加资讯一览</string>
     <!-- List of available providers -->
     <string name="smartspace_mode_label">资讯一览提供程序</string>
     <string name="smartspace_mode_google">Google</string>
@@ -461,6 +464,7 @@
 
     -->
     <string name="lawnchair_bug_report">Lawnchair 错误报告</string>
+    <string name="launcher_bug_report">Launcher 错误报告</string>
     <string name="crash_report_notif_title">%1$s 已崩溃</string>
     <string name="action_upload_crash_report">上传崩溃日志</string>
     <string name="action_upload_error">上传失败</string>
