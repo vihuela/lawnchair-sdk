@@ -9,6 +9,16 @@
     public <init>(...);
 }
 
+# Protobuf Lite stores generated field names (for example, "pageIndex_") in message metadata
+# and resolves them reflectively at runtime. Preserve only Launcher/Lawnchair proto fields; their
+# owning classes and the rest of the SDK remain eligible for the host app's package-specific R8.
+-keepclassmembers class com.android.launcher3.** extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}
+-keepclassmembers class app.lawnchair.LawnchairProto$** extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}
+
 # Launcher is compiled against framework and SystemUI APIs that are not exposed by the public
 # Android SDK jar used by a host application's R8 run. Runtime access is already SDK/capability
 # guarded; suppress resolution warnings without keeping or packaging phantom framework classes.
