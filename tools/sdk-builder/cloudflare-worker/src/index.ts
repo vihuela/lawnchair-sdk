@@ -247,22 +247,8 @@ async function jobResponse(env: Env, jobId: string): Promise<Response> {
     return json({ ...job, actionsUrl: run.html_url, log: Array.isArray(job.log) ? job.log : progress.log });
   }
   const result = job.result as Record<string, unknown>;
-  result.downloads = [{ name: `launcher-sdk-${jobId}-ci-artifact.zip`, url: `/api/jobs/${jobId}/artifact` }];
+  result.downloads = [];
   return json({ ...job, state: "completed", progress: 100, message: "GitHub Actions 构建并发布完成", result, actionsUrl: run.html_url });
-}
-
-async function artifactResponse(env: Env, jobId: string): Promise<Response> {
-  const run = await findRun(env, jobId);
-  if (!run) return json({ error: "CI 构建任务不存在" }, 404);
-  const artifact = await findArtifact(env, run.id, jobId);
-  if (!artifact) return json({ error: "CI 构建产物尚未生成或已经过期" }, 404);
-  return new Response(await downloadArtifact(env, artifact), {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="launcher-sdk-${jobId}-ci-artifact.zip"`,
-      "Cache-Control": "private, max-age=300",
-    },
-  });
 }
 
 async function withSecurityHeaders(response: Response): Promise<Response> {
@@ -284,8 +270,6 @@ export default {
 
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f]{12})\/?$/);
       if (request.method === "GET" && jobMatch) return jobResponse(env, jobMatch[1]);
-      const artifactMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f]{12})\/artifact$/);
-      if (request.method === "GET" && artifactMatch) return artifactResponse(env, artifactMatch[1]);
       if (url.pathname.startsWith("/api/")) return json({ error: "接口不存在" }, 404);
 
       return withSecurityHeaders(await env.ASSETS.fetch(request));

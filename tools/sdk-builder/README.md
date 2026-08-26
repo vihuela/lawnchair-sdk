@@ -91,7 +91,7 @@ Packages 发布和报告提取都在该任务工作区内完成；报告复制�
 ## Cloudflare + GitHub Actions 部署
 
 线上网页和 API 位于 `tools/sdk-builder/cloudflare-worker`。Cloudflare Worker 负责静态页面、
-包名校验、版本查询、CI 触发与状态/产物代理；Android 编译在 GitHub 托管 Runner 中执行，
+包名校验、版本查询、CI 触发与状态结果代理；Android 编译在 GitHub 托管 Runner 中执行，
 不依赖开发者电脑。`.github/workflows/launcher_sdk_package.yml` 会 checkout 私有仓库，安装并
 校验 Java 21、Android 36.1、Build Tools 36.1.0、Gradle Wrapper、源码文件与磁盘空间，
 再构建、校验并发布 GitHub Packages。
@@ -107,11 +107,13 @@ npm run deploy
 
 不要把凭证放在 `wrangler.jsonc`、静态 HTML 或普通 `vars` 中。CI 发布使用仓库自动生成且
 随任务失效的 `GITHUB_TOKEN`，工作流仅授予 `contents: read`、`packages: write` 和
-`actions: read`。网页不会拿到任何 GitHub 凭证；CI artifact 也由 Worker 鉴权下载并转发。
+`actions: read`。网页不会拿到任何 GitHub 凭证；Worker 只读取 CI 内部的 `job.json` 状态结果，
+不会向公网转发 AAR、mapping 或源码产物。
 
 线上页面可公开访问。Worker 对包名做白名单式格式校验、同一 IP 30 秒冷却，并将全局并发
 构建限制为 3 个；如后续需要更严格的防滥用，可在创建任务前增加 Cloudflare Turnstile。
-Actions artifact 保留 7 天，GitHub Packages 中的 Maven 版本按仓库权限长期保存。
+仅含状态结果的 Actions artifact 保留 1 天；最终 Maven 产物只发布到 GitHub Packages，
+并按仓库权限长期保存。
 
 也可以直接验证底层构建：
 

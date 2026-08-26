@@ -79,6 +79,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: launcher-sdk-${{ inputs.job_id }}
-          path: tools/sdk-builder/output/${{ inputs.job_id }}/downloads
+          path: tools/sdk-builder/output/${{ inputs.job_id }}/downloads/job.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
