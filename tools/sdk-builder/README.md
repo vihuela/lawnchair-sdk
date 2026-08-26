@@ -16,7 +16,7 @@ Adapter 使用，不进入业务接入签名。构建发现任一业务类未改
 Lawnchair SDK 类型时会直接失败。
 
 网页始终编译当前 Lawnchair checkout。SDK 基线版本由服务端从
-`launcher-core/build.gradle` 自动读取，当前从 `0.1` 开始。首次构建时网页会把 Launcher
+`launcher-core/build.gradle` 自动读取，当前为 `0.2`。首次构建时网页会把 Launcher
 自有模块发布到同一个 GitHub Packages 仓库；后续发现该基线已存在时直接复用。
 
 发布使用 GitHub Packages Maven Registry。把服务端凭证放在已被 Git 忽略的

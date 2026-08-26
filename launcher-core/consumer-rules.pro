@@ -3,6 +3,12 @@
     public static void initialize(android.app.Application);
 }
 
+# Launcher selects these implementations from resource class names and invokes their constructors
+# reflectively. Preserve both names and constructors in the host application's R8 pass.
+-keep class ** implements com.android.launcher3.util.ResourceBasedOverride {
+    public <init>(...);
+}
+
 # Launcher is compiled against framework and SystemUI APIs that are not exposed by the public
 # Android SDK jar used by a host application's R8 run. Runtime access is already SDK/capability
 # guarded; suppress resolution warnings without keeping or packaging phantom framework classes.
