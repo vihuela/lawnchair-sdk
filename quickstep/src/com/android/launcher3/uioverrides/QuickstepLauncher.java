@@ -521,6 +521,12 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer 
 
     @Override
     public void onDestroy() {
+        // Stop service callbacks first. Other teardown below talks to System UI and may fail if
+        // the platform connection is already gone during a configuration change.
+        if (mTISBindHelper != null) {
+            mTISBindHelper.onDestroy();
+        }
+
         if (mAppTransitionManager != null) {
             mAppTransitionManager.onActivityDestroyed();
         }
@@ -531,8 +537,6 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer 
             SystemUiProxy.INSTANCE.get(this).setUnfoldAnimationListener(null);
             mUnfoldTransitionProgressProvider.destroy();
         }
-
-        mTISBindHelper.onDestroy();
 
         if (mLauncherUnfoldAnimationController != null) {
             mLauncherUnfoldAnimationController.onDestroy();

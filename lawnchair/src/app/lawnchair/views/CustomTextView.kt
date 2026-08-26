@@ -2,13 +2,13 @@ package app.lawnchair.views
 
 import android.content.Context
 import android.util.AttributeSet
-import androidx.appcompat.widget.AppCompatTextView
+import android.widget.TextView
 import app.lawnchair.font.FontManager
 
 abstract class CustomTextView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-) : AppCompatTextView(context, attrs) {
+) : TextView(context, attrs) {
 
     init {
         @Suppress("LeakingThis")

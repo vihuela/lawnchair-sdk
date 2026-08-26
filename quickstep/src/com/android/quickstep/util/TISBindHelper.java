@@ -54,6 +54,7 @@ public class TISBindHelper implements ServiceConnection {
     private short mConnectionAttempts;
     private boolean mTisServiceBound;
     private boolean mIsConnected;
+    private boolean mIsDestroyed;
     @Nullable private TISBinder mBinder;
 
     public TISBindHelper(Context context, Consumer<TISBinder> connectionCallback) {
@@ -64,6 +65,11 @@ public class TISBindHelper implements ServiceConnection {
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+        if (mIsDestroyed) {
+            internalUnbindToTIS();
+            return;
+        }
+
         if (!(iBinder instanceof TISBinder)) {
             // Seems like there can be a race condition when user unlocks, which kills the TIS
             // process and re-starts it. I guess in the meantime service can be connected to
@@ -95,6 +101,7 @@ public class TISBindHelper implements ServiceConnection {
     @Override
     public void onBindingDied(ComponentName name) {
         Log.w(TAG, "TIS binding died");
+        internalUnbindToTIS();
         internalBindToTIS();
     }
 
@@ -126,6 +133,9 @@ public class TISBindHelper implements ServiceConnection {
      * Runs the given {@param r} runnable when the service is connected.
      */
     public void runOnBindToTouchInteractionService(Runnable r) {
+        if (mIsDestroyed) {
+            return;
+        }
         if (mIsConnected) {
             r.run();
         } else {
@@ -138,6 +148,9 @@ public class TISBindHelper implements ServiceConnection {
      * {@link #mConnectionRunnable}. Unbind via {@link #internalUnbindToTIS()}
      */
     private void internalBindToTIS() {
+        if (mIsDestroyed || mTisServiceBound) {
+            return;
+        }
         mTisServiceBound = mContext.bindService(new Intent(mContext, TouchInteractionService.class),
                 this, 0);
         if (mTisServiceBound) {
@@ -171,6 +184,10 @@ public class TISBindHelper implements ServiceConnection {
      * Called when the activity is destroyed to clear the binding
      */
     public void onDestroy() {
+        if (mIsDestroyed) {
+            return;
+        }
+        mIsDestroyed = true;
         internalUnbindToTIS();
         resetServiceBindRetryState();
         mBinder = null;
