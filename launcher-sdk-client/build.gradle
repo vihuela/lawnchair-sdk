@@ -1,12 +1,40 @@
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id "maven-publish"
 }
 
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.isFile()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
 def clientPackageName = providers.gradleProperty("launcherClientPackage")
     .orElse("com.example.generated")
 def clientNamespace = clientPackageName.map { "${it}.launcher.sdk" }
+def clientSdkVersion = providers.gradleProperty("launcherClientSdkVersion")
+    .orElse("0.1")
+def clientPublicationVersion = providers.gradleProperty("launcherClientPublicationVersion")
+    .orElse("0.1")
+def githubPackagesOwner = providers.gradleProperty("githubPackagesOwner")
+    .orElse(providers.environmentVariable("GITHUB_PACKAGES_OWNER"))
+    .orElse("vihuela")
+def githubPackagesRepository = providers.gradleProperty("githubPackagesRepository")
+    .orElse(providers.environmentVariable("GITHUB_PACKAGES_REPOSITORY"))
+    .orElse("lawnchair-sdk")
+def githubPackagesUsername = providers.environmentVariable("GITHUB_PACKAGES_USERNAME")
+    .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+    .orElse(providers.provider { localProperties.getProperty("github.packages.username", "") })
+def githubPackagesToken = providers.environmentVariable("GITHUB_PACKAGES_TOKEN")
+    .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+    .orElse(providers.provider { localProperties.getProperty("github.packages.token", "") })
 def clientAdapterName = clientPackageName.map { packageName ->
     def digest = java.security.MessageDigest.getInstance("SHA-256")
         .digest(packageName.getBytes("UTF-8"))
@@ -122,4 +150,46 @@ tasks.matching { task ->
 
 tasks.matching { it.name == "minifyReleaseWithR8" }.configureEach {
     dependsOn(generateClientObfuscationRules)
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register("clientRelease", MavenPublication) {
+                groupId = "com.launcher.generated"
+                artifactId = "${clientPackageName.get()}-launcher-sdk"
+                version = clientPublicationVersion.get()
+                artifact(tasks.named("bundleReleaseAar"))
+
+                pom.withXml {
+                    def dependencies = asNode().appendNode("dependencies")
+                    def core = dependencies.appendNode("dependency")
+                    core.appendNode("groupId", "com.launcher.sdk")
+                    core.appendNode("artifactId", "launcher-core")
+                    core.appendNode("version", clientSdkVersion.get())
+                    core.appendNode("scope", "runtime")
+                }
+            }
+        }
+        repositories {
+            maven {
+                name = "GithubPackages"
+                url = uri("https://maven.pkg.github.com/${githubPackagesOwner.get()}/${githubPackagesRepository.get()}")
+                credentials {
+                    username = githubPackagesUsername.getOrElse("")
+                    password = githubPackagesToken.getOrElse("")
+                }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "publishClientReleasePublicationToGithubPackagesRepository" }.configureEach {
+    doFirst {
+        if (!githubPackagesUsername.isPresent() || !githubPackagesToken.isPresent()) {
+            throw new GradleException(
+                "GitHub Packages 发布凭证缺失：请设置 GITHUB_PACKAGES_USERNAME 和 GITHUB_PACKAGES_TOKEN",
+            )
+        }
+    }
 }

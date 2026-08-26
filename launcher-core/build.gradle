@@ -30,7 +30,7 @@ def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse("app.lawnchair")
 def sdkPublishVersion = providers.environmentVariable("VERSION")
     .orElse(providers.gradleProperty("PUBLISH_VERSION"))
-    .orElse("0.2.2-local")
+    .orElse("0.1-local")
 
 android {
     namespace "com.android.launcher3"
@@ -72,10 +72,6 @@ android {
         "META-INF/AL2.0",
         "META-INF/LGPL2.1",
     ]
-
-    compileOptions {
-        coreLibraryDesugaringEnabled true
-    }
 
     flavorDimensions += ["app", "recents", "channel"]
 
@@ -182,8 +178,6 @@ dependencies {
     implementation fileTree(dir: "$rootDir/prebuilts/libs", include: SYSTEM_UI_STATSD_JAR)
     implementation fileTree(dir: "$rootDir/prebuilts/libs", include: WINDOW_MANAGER_SHELL_JAR)
     compileOnly fileTree(dir: "$rootDir/prebuilts/libs", include: FRAMEWORK_JAR)
-
-    coreLibraryDesugaring libs.android.desugarJdkLibs
 
     implementation libs.androidx.profileinstaller
     implementation libs.androidx.recyclerview
@@ -307,6 +301,22 @@ afterEvaluate {
                         url = "https://github.com/vihuela/lawnchair-sdk"
                         connection = "scm:git:https://github.com/vihuela/lawnchair-sdk.git"
                         developerConnection = "scm:git:ssh://git@github.com/vihuela/lawnchair-sdk.git"
+                    }
+                }
+
+                pom.withXml {
+                    def vendorArtifacts = [
+                        "com.github.ChickenHook:RestrictionBypass": "restriction-bypass",
+                        "com.github.samanzamani:PersianDate": "persian-date",
+                    ]
+                    asNode().dependencies.dependency.each { dependency ->
+                        def key = "${dependency.groupId.text()}:${dependency.artifactId.text()}"
+                        def vendorArtifact = vendorArtifacts[key]
+                        if (vendorArtifact != null) {
+                            dependency.groupId[0].setValue(sdkPublishGroup.get())
+                            dependency.artifactId[0].setValue(vendorArtifact)
+                            dependency.version[0].setValue(sdkPublishVersion.get())
+                        }
                     }
                 }
             }

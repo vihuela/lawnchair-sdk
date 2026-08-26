@@ -20,17 +20,32 @@
     .topbarInner { width:min(1120px,calc(100% - 40px)); height:100%; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:20px; }
     .brand { display:flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em; }
     .brandMark { width:10px; height:10px; border-radius:3px; background:var(--accent); }
-    .sourceMeta { color:var(--muted); font-size:13px; }
+    .sourceMeta { display:flex; align-items:center; gap:14px; color:var(--muted); font-size:13px; }
     .sourceMeta strong { margin-left:6px; color:var(--text); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .sourceRepository { max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .publishTarget { padding-left:14px; border-left:1px solid var(--line-strong); }
+    .publishTarget.ready { color:var(--accent); }
+    .publishTarget.missing { color:var(--danger); }
     .workspace { width:min(1120px,calc(100% - 40px)); margin:0 auto; padding:48px 0 72px; animation:workspace-in var(--slow) var(--ease) both; }
     .intro { margin-bottom:28px; }
     h1 { margin:0 0 8px; font-size:30px; line-height:1.2; letter-spacing:-.025em; font-weight:680; }
     .intro p { max-width:720px; margin:0; color:var(--muted); font-size:15px; }
     .panel { border:1px solid var(--line); border-radius:12px; background:var(--surface); }
     .buildPanel { padding:20px; }
-    form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:14px; }
+    form { display:grid; grid-template-columns:minmax(240px,1fr) auto; align-items:start; gap:14px; }
+    form > label { min-width:0; }
     label { display:block; color:var(--text); font-size:13px; font-weight:600; }
+    .labelRow { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px; }
+    .versionStatus { min-width:0; overflow:hidden; color:var(--muted); font-size:11px; font-weight:500; text-overflow:ellipsis; white-space:nowrap; }
+    .versionStatus.found { color:var(--accent); }
+    .versionStatus.error { color:var(--danger); }
     input { display:block; width:100%; height:44px; margin-top:8px; border:1px solid var(--line-strong); border-radius:8px; padding:0 12px; color:var(--text); background:var(--surface); outline:none; font:500 14px ui-monospace,SFMono-Regular,Menlo,monospace; transition:border-color var(--quick) var(--ease),box-shadow var(--quick) var(--ease),background var(--quick) var(--ease); }
+    .inputDropdown { position:relative; margin-top:8px; }
+    .inputDropdown input { margin-top:0; padding-right:44px; }
+    .historySelect { position:absolute; z-index:1; top:1px; right:1px; width:40px; height:42px; appearance:none; border:0; border-left:1px solid var(--line); border-radius:0 7px 7px 0; color:transparent; background-color:var(--surface-soft); background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%236c746e' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'/%3E%3C/svg%3E"); background-position:center; background-repeat:no-repeat; cursor:pointer; outline:none; }
+    .historySelect:hover { background:#e5e9e4; }
+    .historySelect:focus { box-shadow:inset 0 0 0 2px rgba(23,107,69,.18); }
+    .historySelect option { color:var(--text); background:var(--surface); }
     input:hover { border-color:#aeb5af; }
     input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(23,107,69,.1); }
     input.invalid { border-color:var(--danger); background:var(--danger-soft); }
@@ -64,6 +79,15 @@
     .summaryItem + .summaryItem { border-left:1px solid var(--line); }
     .summaryLabel { display:block; margin-bottom:6px; color:var(--muted); font-size:12px; }
     code { color:#24543d; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; white-space:pre-wrap; }
+    .dependencySection { margin-top:14px; }
+    .dependencyTitle { margin:0 0 8px; color:var(--muted); font-size:12px; font-weight:600; }
+    .dependencyList { display:grid; gap:8px; }
+    .dependencyItem { display:grid; grid-template-columns:minmax(160px,.45fr) minmax(0,1fr); gap:14px; align-items:center; border:1px solid var(--line); border-radius:9px; padding:12px 14px; background:var(--surface); }
+    .dependencyMeta { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+    .dependencyName { font-weight:650; }
+    .dependencyBadge { border:1px solid var(--line-strong); border-radius:999px; padding:1px 7px; color:var(--muted); font-size:10px; }
+    .dependencyBadge.direct { border-color:#9ab8a8; color:var(--accent); background:#edf4f0; }
+    .dependencyBadge.specific { border-color:#a8b2c5; color:#4a5c7b; background:#f0f2f6; }
     .downloads { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 28px; }
     .downloads a { border:1px solid var(--line-strong); border-radius:7px; padding:7px 10px; color:#39413b; background:var(--surface); text-decoration:none; font-size:12px; transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease),transform var(--quick) var(--ease); }
     .downloads a:hover { border-color:#8d9990; color:var(--accent); transform:translateY(-1px); }
@@ -87,12 +111,13 @@
     @keyframes panel-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
     @keyframes spin { to { transform:rotate(360deg); } }
     @media (max-width:720px) {
-      .topbarInner,.workspace { width:min(100% - 24px,1120px); }
+      .topbarInner,.workspace { width:min(calc(100% - 24px),1120px); }
       .workspace { padding-top:32px; }
       form { grid-template-columns:1fr; }
       .buildButton { width:100%; margin-top:0; }
       .summaryGrid { grid-template-columns:1fr; }
       .summaryItem + .summaryItem { border-left:0; border-top:1px solid var(--line); }
+      .dependencyItem { grid-template-columns:1fr; gap:6px; }
       .sourceMeta span { display:none; }
     }
     @media (prefers-reduced-motion:reduce) {
@@ -104,21 +129,29 @@
   <header class="topbar">
     <div class="topbarInner">
       <div class="brand"><span class="brandMark" aria-hidden="true"></span>Launcher SDK Builder</div>
-      <div class="sourceMeta"><span>当前源码版本</span><strong id="sourceVersion">读取中</strong></div>
+      <div class="sourceMeta">
+        <span>SDK 基线<strong id="sourceVersion">读取中</strong></span>
+        <span id="sourceRepository" class="sourceRepository">读取源码配置</span>
+        <span id="publishTarget" class="publishTarget">读取发布配置</span>
+      </div>
     </div>
   </header>
   <main class="workspace">
     <section class="intro">
       <h1>生成包专属 SDK</h1>
-      <p>输入业务 Android 包名，生成随机化后的 R8 AAR、本地 Maven 依赖、mapping 和 API 对照报告。</p>
+      <p id="introText">输入业务 Android 包名，生成随机化后的 R8 AAR，通过校验后发布到 GitHub Packages，并提供 mapping 和 API 对照报告。</p>
     </section>
     <section class="panel buildPanel">
       <form id="buildForm">
-        <label>Android 包名
-          <input id="packageName" value="" placeholder="com.example.game" autocomplete="off" spellcheck="false" required aria-describedby="packageValidation" aria-invalid="true">
+        <label>
+          <span class="labelRow"><span>Android 包名</span><span id="packageVersionStatus" class="versionStatus">输入包名后查询版本</span></span>
+          <div class="inputDropdown">
+            <input id="packageName" value="" placeholder="com.example.game" autocomplete="off" spellcheck="false" required aria-describedby="packageValidation" aria-invalid="true">
+            <select id="packageHistory" class="historySelect" aria-label="选择历史包名"><option value="">历史包名</option></select>
+          </div>
           <span id="packageValidation" class="fieldValidation" aria-live="polite">至少两段，每段以字母开头</span>
         </label>
-        <button id="buildButton" class="buildButton" type="submit" disabled>开始编译</button>
+        <button id="buildButton" class="buildButton" type="submit" disabled>编译并发布</button>
       </form>
     </section>
     <section id="statusCard" class="panel" aria-live="polite">
@@ -132,8 +165,12 @@
     <section id="result">
       <div class="resultHeader"><h2>构建结果</h2><div id="abiValidation" class="abiStatus"></div></div>
       <div class="summaryGrid">
-        <div class="summaryItem"><span class="summaryLabel">Maven coordinate</span><code id="coordinate"></code></div>
+        <div class="summaryItem"><span class="summaryLabel">GitHub Packages coordinate</span><code id="coordinate"></code></div>
         <div class="summaryItem"><span class="summaryLabel">Gradle dependency</span><code id="dependency"></code></div>
+      </div>
+      <div class="dependencySection">
+        <div class="dependencyTitle">业务接入依赖（仅需这一条）</div>
+        <div id="dependencyList" class="dependencyList"></div>
       </div>
       <div id="downloads" class="downloads"></div>
       <div class="reportToolbar">
@@ -151,11 +188,66 @@
   <script>
     const $ = id => document.getElementById(id);
     const escapeHtml = value => String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    const API_BASE = location.hostname === '127.0.0.1' && location.port === '8765' ? '' : 'http://127.0.0.1:8765';
+    const API_BASE = '';
     const PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
+    const STORAGE_KEYS = {
+      packageHistory:'launcherSdkBuilder.packageHistory',
+      lastPackage:'launcherSdkBuilder.lastPackage'
+    };
     let pollTimer;
+    let versionLookupTimer;
+    let versionLookupSequence = 0;
     let isBuilding = false;
     let packageTouched = false;
+    let publishTargetAvailable = false;
+    let serverCredentialsConfigured = false;
+
+    function storageGet(key, fallback = '') {
+      try { return localStorage.getItem(key) ?? fallback; }
+      catch (_) { return fallback; }
+    }
+
+    function storageSet(key, value) {
+      try { localStorage.setItem(key, value); }
+      catch (_) {}
+    }
+
+    function readHistory(key) {
+      try {
+        const values = JSON.parse(storageGet(key, '[]'));
+        return Array.isArray(values) ? values.filter(value => typeof value === 'string').slice(0, 8) : [];
+      } catch (_) { return []; }
+    }
+
+    function rememberHistory(key, value) {
+      if (!value) return;
+      const values = [value, ...readHistory(key).filter(item => item !== value)].slice(0, 8);
+      storageSet(key, JSON.stringify(values));
+    }
+
+    function populateHistorySelect(selectId, values, emptyLabel) {
+      const select = $(selectId);
+      select.replaceChildren(new Option(emptyLabel, ''));
+      values.forEach(value => select.add(new Option(value, value)));
+      select.value = '';
+    }
+
+    function refreshHistorySelects() {
+      populateHistorySelect('packageHistory', readHistory(STORAGE_KEYS.packageHistory), '历史包名');
+    }
+
+    function restorePersistedInputs() {
+      $('packageName').value = storageGet(STORAGE_KEYS.lastPackage);
+      packageTouched = Boolean($('packageName').value);
+      refreshHistorySelects();
+    }
+
+    function persistCurrentInputs() {
+      const packageName = $('packageName').value.trim();
+      storageSet(STORAGE_KEYS.lastPackage, packageName);
+      if (!packageNameError(packageName)) rememberHistory(STORAGE_KEYS.packageHistory, packageName);
+      refreshHistorySelects();
+    }
 
     async function readJson(response) {
       const body = await response.text();
@@ -173,7 +265,28 @@
         if (!response.ok) throw new Error(config.error || '版本读取失败');
         $('sourceVersion').textContent = `v${config.sdkVersion}`;
         $('sourceVersion').title = `读取自 ${config.versionSource}`;
-      } catch (_) { $('sourceVersion').textContent = '读取失败'; }
+        $('sourceRepository').textContent = config.source?.display || '当前本地工作区';
+        $('sourceRepository').title = config.source?.mode === 'github'
+          ? `每个构建任务都会重新下载 ${config.source.owner}/${config.source.repository} 的 ${config.source.ref}`
+          : '构建任务直接使用当前服务所在的本地源码工作区';
+        $('introText').textContent = config.source?.mode === 'github'
+          ? '输入业务 Android 包名；服务端会拉取指定 GitHub 源码并创建独立工作区，完成 R8 构建、校验和发布后自动清理。'
+          : '输入业务 Android 包名，使用当前本地源码生成 R8 AAR，通过校验后发布到 GitHub Packages。';
+        publishTargetAvailable = Boolean(config.githubPackages?.url);
+        serverCredentialsConfigured = Boolean(config.githubPackages?.configured);
+        refreshHistorySelects();
+        $('publishTarget').textContent = `${config.githubPackages.owner}/${config.githubPackages.repository} · GitHub Packages`;
+        $('publishTarget').className = `publishTarget ${serverCredentialsConfigured ? 'ready' : 'missing'}`;
+        validateForm();
+        scheduleVersionLookup();
+      } catch (_) {
+        $('sourceVersion').textContent = '读取失败';
+        $('sourceRepository').textContent = '源码配置读取失败';
+        $('publishTarget').textContent = '发布配置读取失败';
+        $('publishTarget').className = 'publishTarget missing';
+        publishTargetAvailable = false;
+        validateForm();
+      }
     }
 
     function packageNameError(value) {
@@ -201,28 +314,87 @@
       input.setAttribute('aria-invalid', String(!valid));
       $('packageValidation').className = `fieldValidation ${valid ? 'valid' : showError ? 'invalid' : ''}`;
       $('packageValidation').textContent = valid ? `格式正确 · ${value.split('.').length} 段` : showError ? error : '至少两段，每段以字母开头';
-      $('buildButton').disabled = isBuilding || !valid;
       return valid;
+    }
+
+    function requestPayload() {
+      return {packageName:$('packageName').value.trim()};
+    }
+
+    function validateForm() {
+      const packageValid = validatePackageName();
+      $('buildButton').disabled = isBuilding || !packageValid || !serverCredentialsConfigured || !publishTargetAvailable;
+      return packageValid && serverCredentialsConfigured && publishTargetAvailable;
+    }
+
+    function setVersionStatus(text, state = '', title = '') {
+      $('packageVersionStatus').textContent = text;
+      $('packageVersionStatus').className = `versionStatus ${state}`.trim();
+      $('packageVersionStatus').title = title;
+    }
+
+    function scheduleVersionLookup() {
+      clearTimeout(versionLookupTimer);
+      const sequence = ++versionLookupSequence;
+      if (!validatePackageName()) { setVersionStatus('输入有效包名后查询版本'); return; }
+      if (!serverCredentialsConfigured) { setVersionStatus('服务端发布凭证不可用', 'error'); return; }
+      if (!publishTargetAvailable) { setVersionStatus('发布目标不可用', 'error'); return; }
+      setVersionStatus('等待查询');
+      versionLookupTimer = setTimeout(() => lookupPackageVersion(sequence), 600);
+    }
+
+    async function lookupPackageVersion(sequence) {
+      setVersionStatus('查询中');
+      try {
+        const response = await fetch(`${API_BASE}/api/package-version`, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(requestPayload())
+        });
+        const version = await readJson(response);
+        if (sequence !== versionLookupSequence) return;
+        if (!response.ok) throw new Error(version.error || `版本查询失败（HTTP ${response.status}）`);
+        setVersionStatus(
+          version.latestVersion ? `最新 ${version.latestVersion}` : `尚未发布 · 首版 ${version.nextVersion}`,
+          'found',
+          version.latestVersion ? `下次构建将发布 ${version.nextVersion}` : ''
+        );
+      } catch (error) {
+        if (sequence === versionLookupSequence) setVersionStatus(error.message, 'error');
+      }
     }
 
     function setBuilding(value) {
       isBuilding = value;
       $('buildButton').classList.toggle('busy', value);
       $('buildButton').setAttribute('aria-busy', String(value));
-      $('buildButton').textContent = value ? '编译中' : '开始编译';
-      validatePackageName();
+      $('buildButton').textContent = value ? '编译并发布中' : '编译并发布';
+      validateForm();
     }
 
-    $('packageName').addEventListener('input', () => { packageTouched = true; validatePackageName(); });
+    $('packageName').addEventListener('input', () => {
+      packageTouched = true;
+      storageSet(STORAGE_KEYS.lastPackage, $('packageName').value.trim());
+      validateForm(); scheduleVersionLookup();
+    });
+    $('packageName').addEventListener('change', persistCurrentInputs);
+    $('packageHistory').addEventListener('change', () => {
+      if (!$('packageHistory').value) return;
+      $('packageName').value = $('packageHistory').value;
+      $('packageHistory').value = '';
+      $('packageName').dispatchEvent(new Event('input'));
+    });
     $('buildForm').addEventListener('submit', async event => {
       event.preventDefault(); clearTimeout(pollTimer); packageTouched = true;
-      if (!validatePackageName()) { $('packageName').focus(); return; }
+      if (!validateForm()) {
+        if (!validatePackageName()) $('packageName').focus();
+        return;
+      }
+      persistCurrentInputs();
       setBuilding(true);
       $('result').style.display = 'none'; $('statusCard').style.display = 'block';
       $('statusTitle').textContent = '正在创建构建任务'; $('statusTitle').className = 'statusTitle'; $('statusText').textContent = '';
       $('progressText').textContent = '0%'; $('progressBar').style.width = '0%'; $('buildLog').textContent = '';
       try {
-        const response = await fetch(`${API_BASE}/api/build`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packageName:$('packageName').value.trim()})});
+        const response = await fetch(`${API_BASE}/api/build`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestPayload())});
         const job = await readJson(response);
         if (!response.ok) throw new Error(job.error || `创建任务失败（HTTP ${response.status}）`);
         $('sourceVersion').textContent = `v${job.sdkVersion}`;
@@ -235,9 +407,14 @@
         const response = await fetch(`${API_BASE}/api/jobs/${id}`);
         const job = await readJson(response);
         if (!response.ok) throw new Error(job.error || `读取任务失败（HTTP ${response.status}）`);
-        $('statusText').textContent = job.message; $('progressText').textContent = `${job.progress}%`; $('progressBar').style.width = `${job.progress}%`;
+        $('statusText').textContent = job.publicationVersion ? `${job.message} · ${job.publicationVersion}` : job.message;
+        if (job.sourceDisplay) {
+          const revision = job.sourceRevision ? ` · ${job.sourceRevision}` : '';
+          $('sourceRepository').textContent = `${job.sourceDisplay}${revision}`;
+        }
+        $('progressText').textContent = `${job.progress}%`; $('progressBar').style.width = `${job.progress}%`;
         $('buildLog').textContent = job.log.join('\n'); $('buildLog').scrollTop = $('buildLog').scrollHeight;
-        if (job.state === 'completed') { $('statusTitle').textContent = '构建完成'; setBuilding(false); renderResult(job.result); return; }
+        if (job.state === 'completed') { $('statusTitle').textContent = '构建并发布完成'; setBuilding(false); renderResult(job.result); return; }
         if (job.state === 'failed') { fail(job.error || '构建失败'); return; }
         pollTimer = setTimeout(() => poll(id), 900);
       } catch (error) { fail(error.message); }
@@ -249,10 +426,16 @@
 
     function renderResult(result) {
       $('coordinate').textContent = result.coordinate; $('dependency').textContent = result.dependencySnippet; $('abiValidation').textContent = result.abiValidation.message;
+      $('dependencyList').innerHTML = result.dependencies.map(item => `<div class="dependencyItem"><div class="dependencyMeta"><span class="dependencyName">${escapeHtml(item.module)}</span><span class="dependencyBadge ${item.direct ? 'direct' : ''}">${item.direct ? '直接添加' : '自动传递'}</span>${item.packageSpecific ? '<span class="dependencyBadge specific">包名专属</span>' : ''}</div><code>${escapeHtml(item.coordinate)}</code></div>`).join('');
       $('downloads').innerHTML = result.downloads.map(file => `<a href="${API_BASE}${file.url}">${escapeHtml(file.name)}</a>`).join('');
       $('functionsTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.functions, 4, row => `<tr><td>${escapeHtml(row.description)}</td><td><code>${escapeHtml(row.sourceClass)}\n${escapeHtml(row.sourceFunction)}</code></td><td><code>${escapeHtml(row.preR8.join('\n'))}</code></td><td><code>${escapeHtml(row.r8.join('\n'))}</code></td></tr>`);
       $('classesTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.classes, 3, row => `<tr><td><code>${escapeHtml(row.source)}</code></td><td><code>${escapeHtml(row.preR8)}</code></td><td><code>${escapeHtml(row.r8)}</code></td></tr>`);
       $('result').style.display = 'block';
+      if (result.source?.display) {
+        const revision = result.source.revision ? ` · ${result.source.revision}` : '';
+        $('sourceRepository').textContent = `${result.source.display}${revision}`;
+      }
+      setVersionStatus(`最新 ${result.latestVersion}`, 'found');
     }
 
     function groupedTableRows(rows, columnCount, renderRow) {
@@ -268,7 +451,7 @@
       document.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
       $('functionsTable').hidden = button.dataset.tab !== 'functions'; $('classesTable').hidden = button.dataset.tab !== 'classes';
     }));
-    loadConfig(); validatePackageName();
+    restorePersistedInputs(); loadConfig(); validateForm();
   </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse("app.lawnchair")
 def sdkPublishVersion = providers.environmentVariable("VERSION")
     .orElse(providers.gradleProperty("PUBLISH_VERSION"))
-    .orElse("0.2.2-local")
+    .orElse("0.1-local")
 
 android {
     namespace "app.lawnchair.sdk.runtime"

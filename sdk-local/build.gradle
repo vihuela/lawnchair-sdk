@@ -4,8 +4,10 @@ import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 
 plugins {
+    id "maven-publish"
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.android.test) apply false
@@ -28,11 +30,75 @@ final def sdkPublishGroup = providers.environmentVariable("GROUP")
     .orElse("app.lawnchair")
 final def sdkPublishVersion = providers.environmentVariable("VERSION")
     .orElse(providers.gradleProperty("PUBLISH_VERSION"))
-    .orElse("0.2.2-local")
+    .orElse("0.1-local")
+final def githubPackagesOwner = providers.gradleProperty("githubPackagesOwner")
+    .orElse(providers.environmentVariable("GITHUB_PACKAGES_OWNER"))
+    .orElse("vihuela")
+final def githubPackagesRepository = providers.gradleProperty("githubPackagesRepository")
+    .orElse(providers.environmentVariable("GITHUB_PACKAGES_REPOSITORY"))
+    .orElse("lawnchair-sdk")
+final def githubPackagesUsername = providers.environmentVariable("GITHUB_PACKAGES_USERNAME")
+    .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+final def githubPackagesToken = providers.environmentVariable("GITHUB_PACKAGES_TOKEN")
+    .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+
+configurations {
+    vendorRestrictionBypass {
+        transitive = false
+    }
+    vendorPersianDate {
+        transitive = false
+    }
+}
+
+dependencies {
+    vendorRestrictionBypass libs.chickenhook.restrictionbypass
+    vendorPersianDate libs.persian.date
+}
+
+publishing {
+    publications {
+        register("restrictionBypass", MavenPublication) {
+            groupId = sdkPublishGroup.get()
+            artifactId = "restriction-bypass"
+            version = sdkPublishVersion.get()
+            artifact(providers.provider { configurations.vendorRestrictionBypass.singleFile }) {
+                extension = "aar"
+            }
+        }
+        register("persianDate", MavenPublication) {
+            groupId = sdkPublishGroup.get()
+            artifactId = "persian-date"
+            version = sdkPublishVersion.get()
+            artifact(providers.provider { configurations.vendorPersianDate.singleFile }) {
+                extension = "aar"
+            }
+        }
+    }
+}
 
 allprojects {
     group = sdkPublishGroup.get()
     version = sdkPublishVersion.get()
+
+    plugins.withId("maven-publish") {
+        tasks.withType(GenerateModuleMetadata).configureEach {
+            enabled = false
+        }
+
+        publishing {
+            repositories {
+                maven {
+                    name = "GithubPackages"
+                    url = uri("https://maven.pkg.github.com/${githubPackagesOwner.get()}/${githubPackagesRepository.get()}")
+                    credentials {
+                        username = githubPackagesUsername.getOrElse("")
+                        password = githubPackagesToken.getOrElse("")
+                    }
+                }
+            }
+        }
+    }
 
     plugins.withType(AndroidBasePlugin).configureEach {
         android {
