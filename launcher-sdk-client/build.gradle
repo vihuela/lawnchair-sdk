@@ -1,0 +1,125 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+def clientPackageName = providers.gradleProperty("launcherClientPackage")
+    .orElse("com.example.generated")
+def clientNamespace = clientPackageName.map { "${it}.launcher.sdk" }
+def clientAdapterName = clientPackageName.map { packageName ->
+    def digest = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(packageName.getBytes("UTF-8"))
+        .encodeHex()
+        .toString()
+    "EntryAdapter${digest.substring(0, 12)}"
+}
+def generatedSourceDir = file("$buildDir/generated/source/client/main/kotlin")
+def generatedRulesDir = layout.buildDirectory.dir("generated/proguard/client")
+def generatedRulesFile = generatedRulesDir.map { it.file("client-rules.pro") }
+
+android {
+    namespace clientNamespace.get()
+
+    defaultConfig {
+        manifestPlaceholders = [
+            launcherClientEntryAdapter: "${clientNamespace.get()}.${clientAdapterName.get()}",
+        ]
+    }
+
+    sourceSets {
+        main {
+            java.srcDir(generatedSourceDir)
+            manifest.srcFile("src/main/AndroidManifest.xml")
+        }
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+
+    buildTypes {
+        preR8 {
+            minifyEnabled false
+            matchingFallbacks = ["release"]
+        }
+        release {
+            minifyEnabled true
+            consumerProguardFiles "consumer-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), generatedRulesFile.get().asFile
+        }
+    }
+}
+
+dependencies {
+    implementation projects.launcherSdkApi
+    implementation libs.kotlinx.coroutines.android
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+}
+
+def generateClientApi = tasks.register("generateClientApi", Sync) {
+    inputs.property("clientPackageName", clientPackageName)
+    inputs.property("clientAdapterName", clientAdapterName)
+    from("src/template/kotlin") {
+        expand(
+            CLIENT_PACKAGE: clientNamespace.get(),
+            CLIENT_ENTRY_ADAPTER: clientAdapterName.get(),
+        )
+        rename { name -> name.replace(".template", "") }
+    }
+    into(generatedSourceDir)
+}
+
+def generateClientObfuscationRules = tasks.register("generateClientObfuscationRules") {
+    inputs.property("clientPackageName", clientPackageName)
+    outputs.file(generatedRulesFile)
+
+    doLast {
+        def packageName = clientNamespace.get()
+        def digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(clientPackageName.get().getBytes("UTF-8"))
+            .encodeHex()
+            .toString()
+        def stems = [
+            "signal", "vault", "orbit", "pixel", "nova", "shield", "vector", "prism",
+            "relay", "harbor", "cipher", "pulse", "atlas", "quartz", "ember", "matrix",
+            "anchor", "vertex", "radar", "lumen", "bridge", "kernel", "stream", "beacon",
+            "canvas", "drift", "fusion", "groove", "horizon", "island", "jigsaw", "keystone",
+        ]
+        def offset = Integer.parseInt(digest.substring(0, 4), 16) % stems.size()
+        def dictionary = (0..<128).collect { index ->
+            def stem = stems[(index + offset) % stems.size()]
+            "${stem}${digest.substring((index % 12) + 4, (index % 12) + 10)}${index}"
+        }
+        def outputDir = generatedRulesDir.get().asFile
+        outputDir.mkdirs()
+        def dictionaryFile = new File(outputDir, "dictionary.txt")
+        dictionaryFile.text = dictionary.join(System.lineSeparator()) + System.lineSeparator()
+        generatedRulesFile.get().asFile.text = """
+-dontoptimize
+-dontpreverify
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,MethodParameters
+-renamesourcefileattribute SourceFile
+-obfuscationdictionary ${dictionaryFile.absolutePath}
+-classobfuscationdictionary ${dictionaryFile.absolutePath}
+-packageobfuscationdictionary ${dictionaryFile.absolutePath}
+-keep,allowobfuscation class ${packageName}.** {
+    public protected *;
+}
+""".stripIndent()
+    }
+}
+
+tasks.matching { task ->
+    task.name.startsWith("compile") ||
+        task.name.startsWith("ksp") ||
+        task.name.startsWith("merge") ||
+        task.name.startsWith("minify")
+}.configureEach {
+    dependsOn(generateClientApi)
+}
+
+tasks.matching { it.name == "minifyReleaseWithR8" }.configureEach {
+    dependsOn(generateClientObfuscationRules)
+}

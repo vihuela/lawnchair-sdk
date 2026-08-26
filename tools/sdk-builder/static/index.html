@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="按 Android 包名生成 Launcher SDK 业务依赖">
+  <title>Launcher SDK Builder</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --page:#e6e9e5; --surface:#f7f8f6; --surface-soft:#eef1ed;
+      --text:#202421; --muted:#6c746e; --line:#dfe3df; --line-strong:#c9cec9;
+      --accent:#176b45; --danger:#b74242; --danger-soft:#f9eceb;
+      --ease:cubic-bezier(.2,0,0,1); --quick:120ms; --standard:220ms; --slow:320ms;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:var(--page); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input { font:inherit; }
+    .topbar { height:58px; border-bottom:1px solid var(--line-strong); background:rgba(241,243,240,.9); backdrop-filter:blur(10px); }
+    .topbarInner { width:min(1120px,calc(100% - 40px)); height:100%; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em; }
+    .brandMark { width:10px; height:10px; border-radius:3px; background:var(--accent); }
+    .sourceMeta { color:var(--muted); font-size:13px; }
+    .sourceMeta strong { margin-left:6px; color:var(--text); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .workspace { width:min(1120px,calc(100% - 40px)); margin:0 auto; padding:48px 0 72px; animation:workspace-in var(--slow) var(--ease) both; }
+    .intro { margin-bottom:28px; }
+    h1 { margin:0 0 8px; font-size:30px; line-height:1.2; letter-spacing:-.025em; font-weight:680; }
+    .intro p { max-width:720px; margin:0; color:var(--muted); font-size:15px; }
+    .panel { border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .buildPanel { padding:20px; }
+    form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:14px; }
+    label { display:block; color:var(--text); font-size:13px; font-weight:600; }
+    input { display:block; width:100%; height:44px; margin-top:8px; border:1px solid var(--line-strong); border-radius:8px; padding:0 12px; color:var(--text); background:var(--surface); outline:none; font:500 14px ui-monospace,SFMono-Regular,Menlo,monospace; transition:border-color var(--quick) var(--ease),box-shadow var(--quick) var(--ease),background var(--quick) var(--ease); }
+    input:hover { border-color:#aeb5af; }
+    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(23,107,69,.1); }
+    input.invalid { border-color:var(--danger); background:var(--danger-soft); }
+    input.valid { border-color:#80a993; }
+    .fieldValidation { display:block; min-height:19px; margin-top:5px; color:var(--muted); font-size:12px; font-weight:400; }
+    .fieldValidation.invalid { color:var(--danger); }
+    .fieldValidation.valid { color:var(--accent); }
+    .buildButton { position:relative; min-width:126px; height:44px; margin-top:27px; border:1px solid var(--accent); border-radius:8px; padding:0 17px; color:#fff; background:var(--accent); font-weight:650; cursor:pointer; transition:transform var(--quick) var(--ease),background var(--quick) var(--ease),box-shadow var(--standard) var(--ease); }
+    .buildButton:hover:not(:disabled) { background:#125b3a; box-shadow:0 4px 12px rgba(23,107,69,.16); transform:translateY(-1px); }
+    .buildButton:active:not(:disabled) { transform:scale(.985); box-shadow:none; }
+    .buildButton:disabled { opacity:.45; cursor:not-allowed; }
+    .buildButton.busy { padding-left:38px; opacity:.8; }
+    .buildButton.busy::before { content:""; position:absolute; left:17px; top:50%; width:12px; height:12px; margin-top:-7px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; }
+    #statusCard { display:none; margin-top:14px; padding:18px 20px; animation:panel-in var(--standard) var(--ease) both; }
+    .statusRow { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+    .statusTitle { font-weight:650; }
+    .statusText { margin-top:2px; color:var(--muted); font-size:13px; }
+    #progressText { font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .progress { height:4px; margin:15px 0 12px; overflow:hidden; border-radius:4px; background:#e8ebe8; }
+    .bar { width:0; height:100%; border-radius:inherit; background:var(--accent); transition:width var(--slow) var(--ease); }
+    details { color:var(--muted); font-size:12px; }
+    summary { width:max-content; cursor:pointer; user-select:none; }
+    pre { max-height:260px; overflow:auto; margin:10px 0 0; border:1px solid var(--line); border-radius:8px; padding:12px; color:#465049; background:var(--surface-soft); font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; }
+    #result { display:none; margin-top:30px; animation:panel-in var(--slow) var(--ease) both; }
+    .resultHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; }
+    h2 { margin:0; font-size:18px; letter-spacing:-.01em; }
+    .abiStatus { display:flex; align-items:center; gap:7px; color:var(--accent); font-size:12px; }
+    .abiStatus::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .summaryGrid { display:grid; grid-template-columns:1fr 1fr; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface); }
+    .summaryItem { min-width:0; padding:16px 18px; }
+    .summaryItem + .summaryItem { border-left:1px solid var(--line); }
+    .summaryLabel { display:block; margin-bottom:6px; color:var(--muted); font-size:12px; }
+    code { color:#24543d; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; white-space:pre-wrap; }
+    .downloads { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 28px; }
+    .downloads a { border:1px solid var(--line-strong); border-radius:7px; padding:7px 10px; color:#39413b; background:var(--surface); text-decoration:none; font-size:12px; transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease),transform var(--quick) var(--ease); }
+    .downloads a:hover { border-color:#8d9990; color:var(--accent); transform:translateY(-1px); }
+    .reportToolbar { display:flex; align-items:flex-end; gap:18px; margin-bottom:10px; }
+    .tabs { display:flex; gap:18px; }
+    .tabButton { border:0; border-bottom:2px solid transparent; padding:6px 0; color:var(--muted); background:transparent; cursor:pointer; font-size:13px; transition:color var(--quick) var(--ease),border-color var(--quick) var(--ease); }
+    .tabButton:hover { color:var(--text); }
+    .tabButton.active { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+    .tableWrap { overflow:auto; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+    table { width:100%; border-collapse:collapse; }
+    th,td { min-width:250px; padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { position:sticky; top:0; color:var(--muted); background:var(--surface-soft); font-size:11px; font-weight:600; }
+    td { font-size:13px; }
+    tbody tr { transition:background var(--quick) var(--ease); }
+    tbody tr:hover { background:#fafbf9; }
+    .groupRow:hover { background:transparent; }
+    .groupRow td { min-width:0; padding:9px 14px; color:#315743; background:#e2e9e4; font-size:12px; font-weight:650; }
+    tr:last-child td { border-bottom:0; }
+    .error { color:var(--danger); }
+    @keyframes workspace-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    @keyframes panel-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @media (max-width:720px) {
+      .topbarInner,.workspace { width:min(100% - 24px,1120px); }
+      .workspace { padding-top:32px; }
+      form { grid-template-columns:1fr; }
+      .buildButton { width:100%; margin-top:0; }
+      .summaryGrid { grid-template-columns:1fr; }
+      .summaryItem + .summaryItem { border-left:0; border-top:1px solid var(--line); }
+      .sourceMeta span { display:none; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbarInner">
+      <div class="brand"><span class="brandMark" aria-hidden="true"></span>Launcher SDK Builder</div>
+      <div class="sourceMeta"><span>当前源码版本</span><strong id="sourceVersion">读取中</strong></div>
+    </div>
+  </header>
+  <main class="workspace">
+    <section class="intro">
+      <h1>生成包专属 SDK</h1>
+      <p>输入业务 Android 包名，生成随机化后的 R8 AAR、本地 Maven 依赖、mapping 和 API 对照报告。</p>
+    </section>
+    <section class="panel buildPanel">
+      <form id="buildForm">
+        <label>Android 包名
+          <input id="packageName" value="" placeholder="com.example.game" autocomplete="off" spellcheck="false" required aria-describedby="packageValidation" aria-invalid="true">
+          <span id="packageValidation" class="fieldValidation" aria-live="polite">至少两段，每段以字母开头</span>
+        </label>
+        <button id="buildButton" class="buildButton" type="submit" disabled>开始编译</button>
+      </form>
+    </section>
+    <section id="statusCard" class="panel" aria-live="polite">
+      <div class="statusRow">
+        <div><div id="statusTitle" class="statusTitle">正在构建</div><div id="statusText" class="statusText"></div></div>
+        <strong id="progressText">0%</strong>
+      </div>
+      <div class="progress"><div id="progressBar" class="bar"></div></div>
+      <details><summary>查看构建日志</summary><pre id="buildLog"></pre></details>
+    </section>
+    <section id="result">
+      <div class="resultHeader"><h2>构建结果</h2><div id="abiValidation" class="abiStatus"></div></div>
+      <div class="summaryGrid">
+        <div class="summaryItem"><span class="summaryLabel">Maven coordinate</span><code id="coordinate"></code></div>
+        <div class="summaryItem"><span class="summaryLabel">Gradle dependency</span><code id="dependency"></code></div>
+      </div>
+      <div id="downloads" class="downloads"></div>
+      <div class="reportToolbar">
+        <div class="tabs">
+          <button class="tabButton active" type="button" data-tab="functions">函数对比</button>
+          <button class="tabButton" type="button" data-tab="classes">类型对比</button>
+        </div>
+      </div>
+      <div class="tableWrap">
+        <table id="functionsTable"><thead><tr><th>中文说明</th><th>源函数</th><th>pre-R8 JVM 签名</th><th>R8 后签名</th></tr></thead><tbody></tbody></table>
+        <table id="classesTable" hidden><thead><tr><th>源类型</th><th>pre-R8</th><th>R8 后类型</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    const API_BASE = location.hostname === '127.0.0.1' && location.port === '8765' ? '' : 'http://127.0.0.1:8765';
+    const PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
+    let pollTimer;
+    let isBuilding = false;
+    let packageTouched = false;
+
+    async function readJson(response) {
+      const body = await response.text();
+      try { return JSON.parse(body); }
+      catch (_) {
+        const preview = body.replace(/\s+/g, ' ').slice(0, 180);
+        throw new Error(`构建服务返回了非 JSON 内容（HTTP ${response.status}）：${preview || '空响应'}`);
+      }
+    }
+
+    async function loadConfig() {
+      try {
+        const response = await fetch(`${API_BASE}/api/config`);
+        const config = await readJson(response);
+        if (!response.ok) throw new Error(config.error || '版本读取失败');
+        $('sourceVersion').textContent = `v${config.sdkVersion}`;
+        $('sourceVersion').title = `读取自 ${config.versionSource}`;
+      } catch (_) { $('sourceVersion').textContent = '读取失败'; }
+    }
+
+    function packageNameError(value) {
+      if (!value) return '请输入 Android 包名';
+      if (!value.includes('.')) return '包名至少需要两段，例如 com.example.game';
+      const segments = value.split('.');
+      const emptyIndex = segments.findIndex(segment => !segment);
+      if (emptyIndex >= 0) return `第 ${emptyIndex + 1} 段不能为空`;
+      const invalidStart = segments.findIndex(segment => !/^[A-Za-z]/.test(segment));
+      if (invalidStart >= 0) return `第 ${invalidStart + 1} 段必须以字母开头`;
+      const invalidCharacters = segments.findIndex(segment => !/^[A-Za-z0-9_]+$/.test(segment));
+      if (invalidCharacters >= 0) return `第 ${invalidCharacters + 1} 段含有无效字符，只允许字母、数字和下划线`;
+      if (!PACKAGE_PATTERN.test(value)) return 'Android 包名格式无效';
+      return '';
+    }
+
+    function validatePackageName() {
+      const input = $('packageName');
+      const value = input.value.trim();
+      const error = packageNameError(value);
+      const valid = !error;
+      const showError = packageTouched && !valid;
+      input.classList.toggle('invalid', showError);
+      input.classList.toggle('valid', valid);
+      input.setAttribute('aria-invalid', String(!valid));
+      $('packageValidation').className = `fieldValidation ${valid ? 'valid' : showError ? 'invalid' : ''}`;
+      $('packageValidation').textContent = valid ? `格式正确 · ${value.split('.').length} 段` : showError ? error : '至少两段，每段以字母开头';
+      $('buildButton').disabled = isBuilding || !valid;
+      return valid;
+    }
+
+    function setBuilding(value) {
+      isBuilding = value;
+      $('buildButton').classList.toggle('busy', value);
+      $('buildButton').setAttribute('aria-busy', String(value));
+      $('buildButton').textContent = value ? '编译中' : '开始编译';
+      validatePackageName();
+    }
+
+    $('packageName').addEventListener('input', () => { packageTouched = true; validatePackageName(); });
+    $('buildForm').addEventListener('submit', async event => {
+      event.preventDefault(); clearTimeout(pollTimer); packageTouched = true;
+      if (!validatePackageName()) { $('packageName').focus(); return; }
+      setBuilding(true);
+      $('result').style.display = 'none'; $('statusCard').style.display = 'block';
+      $('statusTitle').textContent = '正在创建构建任务'; $('statusTitle').className = 'statusTitle'; $('statusText').textContent = '';
+      $('progressText').textContent = '0%'; $('progressBar').style.width = '0%'; $('buildLog').textContent = '';
+      try {
+        const response = await fetch(`${API_BASE}/api/build`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packageName:$('packageName').value.trim()})});
+        const job = await readJson(response);
+        if (!response.ok) throw new Error(job.error || `创建任务失败（HTTP ${response.status}）`);
+        $('sourceVersion').textContent = `v${job.sdkVersion}`;
+        poll(job.id);
+      } catch (error) { fail(error.message); }
+    });
+
+    async function poll(id) {
+      try {
+        const response = await fetch(`${API_BASE}/api/jobs/${id}`);
+        const job = await readJson(response);
+        if (!response.ok) throw new Error(job.error || `读取任务失败（HTTP ${response.status}）`);
+        $('statusText').textContent = job.message; $('progressText').textContent = `${job.progress}%`; $('progressBar').style.width = `${job.progress}%`;
+        $('buildLog').textContent = job.log.join('\n'); $('buildLog').scrollTop = $('buildLog').scrollHeight;
+        if (job.state === 'completed') { $('statusTitle').textContent = '构建完成'; setBuilding(false); renderResult(job.result); return; }
+        if (job.state === 'failed') { fail(job.error || '构建失败'); return; }
+        pollTimer = setTimeout(() => poll(id), 900);
+      } catch (error) { fail(error.message); }
+    }
+
+    function fail(message) {
+      $('statusTitle').textContent = '构建失败'; $('statusTitle').className = 'statusTitle error'; $('statusText').textContent = message; setBuilding(false);
+    }
+
+    function renderResult(result) {
+      $('coordinate').textContent = result.coordinate; $('dependency').textContent = result.dependencySnippet; $('abiValidation').textContent = result.abiValidation.message;
+      $('downloads').innerHTML = result.downloads.map(file => `<a href="${API_BASE}${file.url}">${escapeHtml(file.name)}</a>`).join('');
+      $('functionsTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.functions, 4, row => `<tr><td>${escapeHtml(row.description)}</td><td><code>${escapeHtml(row.sourceClass)}\n${escapeHtml(row.sourceFunction)}</code></td><td><code>${escapeHtml(row.preR8.join('\n'))}</code></td><td><code>${escapeHtml(row.r8.join('\n'))}</code></td></tr>`);
+      $('classesTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.classes, 3, row => `<tr><td><code>${escapeHtml(row.source)}</code></td><td><code>${escapeHtml(row.preR8)}</code></td><td><code>${escapeHtml(row.r8)}</code></td></tr>`);
+      $('result').style.display = 'block';
+    }
+
+    function groupedTableRows(rows, columnCount, renderRow) {
+      const groups = new Map();
+      rows.forEach(row => {
+        if (!groups.has(row.group)) groups.set(row.group, []);
+        groups.get(row.group).push(row);
+      });
+      return Array.from(groups, ([group, entries]) => `<tr class="groupRow"><td colspan="${columnCount}">${escapeHtml(group)}</td></tr>${entries.map(renderRow).join('')}`).join('');
+    }
+
+    document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
+      $('functionsTable').hidden = button.dataset.tab !== 'functions'; $('classesTable').hidden = button.dataset.tab !== 'classes';
+    }));
+    loadConfig(); validatePackageName();
+  </script>
+</body>
+</html>

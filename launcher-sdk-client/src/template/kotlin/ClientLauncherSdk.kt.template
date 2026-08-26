@@ -1,0 +1,397 @@
+package ${CLIENT_PACKAGE}
+
+import android.app.Application
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import app.lawnchair.sdk.LawnchairOperations
+import app.lawnchair.sdk.LawnchairSdkHost
+import app.lawnchair.sdk.api.DesktopItemActionEvent
+import app.lawnchair.sdk.api.DesktopItemClickAction
+import app.lawnchair.sdk.api.DesktopItemConflictPolicy
+import app.lawnchair.sdk.api.DesktopItemPlacement
+import app.lawnchair.sdk.api.DesktopItemRowAnchor
+import app.lawnchair.sdk.api.DesktopItemSpec
+import app.lawnchair.sdk.api.DesktopItemsExtension
+import app.lawnchair.sdk.api.DesktopItemsSnapshot
+import app.lawnchair.sdk.api.DesktopRevealAnimation
+import app.lawnchair.sdk.api.DesktopVisibleSource
+import app.lawnchair.sdk.api.LauncherCommand
+import app.lawnchair.sdk.api.LauncherCommandResult
+import app.lawnchair.sdk.api.LauncherEvent
+import app.lawnchair.sdk.api.LauncherFailureReason
+import app.lawnchair.sdk.api.LauncherIconClickDecision
+import app.lawnchair.sdk.api.LauncherIconClickInterceptor
+import app.lawnchair.sdk.api.LauncherIconClickRequest
+import app.lawnchair.sdk.api.LauncherRejectReason
+import app.lawnchair.sdk.api.LauncherStateSnapshot
+import app.lawnchair.sdk.api.LawnchairSdkEntry
+import app.lawnchair.sdk.api.MinusOneAnimation
+import app.lawnchair.sdk.api.MinusOneExtension
+import app.lawnchair.sdk.api.MinusOneLaunchPolicy
+import app.lawnchair.sdk.api.MinusOnePhase
+import app.lawnchair.sdk.api.MinusOneScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+/** Package-specific public facade. This class is intentionally renamed by the SDK R8 build. */
+object ClientLauncherSdk {
+    @JvmStatic
+    fun initialize(application: Application, entry: ClientLauncherEntry) {
+        ClientEntryRegistry.install(entry)
+        LawnchairSdkHost.initialize(application)
+    }
+
+    @JvmStatic
+    fun isDefaultLauncher(context: Context): Boolean = LawnchairOperations.isDefaultLauncher(context)
+
+    @JvmStatic
+    fun currentState(): ClientLauncherStateSnapshot = LawnchairOperations.state.value.toClientState()
+
+    @JvmStatic
+    fun observeState(): Flow<ClientLauncherStateSnapshot> = LawnchairOperations.state.map { it.toClientState() }
+
+    @JvmStatic
+    fun observeEvents(): Flow<ClientLauncherEvent> = LawnchairOperations.events.map { it.toClientEvent() }
+
+    @JvmStatic
+    suspend fun launchDesktop(): ClientCommandResult = execute(LauncherCommand.LaunchDesktop)
+
+    @JvmStatic
+    suspend fun openMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+        LauncherCommand.OpenMinusOne(animated.toMinusOneAnimation()),
+    )
+
+    @JvmStatic
+    suspend fun closeMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+        LauncherCommand.CloseMinusOne(animated.toMinusOneAnimation()),
+    )
+
+    @JvmStatic
+    suspend fun toggleMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+        LauncherCommand.ToggleMinusOne(animated.toMinusOneAnimation()),
+    )
+
+    @JvmStatic
+    suspend fun revealDesktopItem(itemId: String, animated: Boolean = true): ClientCommandResult = execute(
+        LauncherCommand.RevealDesktopItem(itemId, animated.toDesktopRevealAnimation()),
+    )
+
+    @JvmStatic
+    suspend fun openDesktopItem(itemId: String, animated: Boolean = false): ClientCommandResult = execute(
+        LauncherCommand.OpenDesktopItem(itemId, animated.toDesktopRevealAnimation()),
+    )
+
+    @JvmStatic
+    suspend fun refreshDesktopItems(): ClientCommandResult = execute(LauncherCommand.RefreshDesktopItems)
+
+    @JvmStatic
+    suspend fun removeDesktopItem(itemId: String, rememberRemoval: Boolean = true): ClientCommandResult = execute(
+        LauncherCommand.RemoveDesktopItem(itemId, rememberRemoval),
+    )
+
+    @JvmStatic
+    suspend fun restoreDesktopItem(itemId: String): ClientCommandResult = execute(
+        LauncherCommand.RestoreDesktopItem(itemId),
+    )
+
+    @JvmStatic
+    suspend fun requestDefaultLauncher(): ClientCommandResult = execute(LauncherCommand.RequestDefaultLauncher)
+
+    @JvmStatic
+    suspend fun openHomeSettings(): ClientCommandResult = execute(LauncherCommand.OpenHomeSettings)
+
+    @JvmStatic
+    suspend fun openLauncherAppInfo(): ClientCommandResult = execute(LauncherCommand.OpenLauncherAppInfo)
+
+    @JvmStatic
+    suspend fun setApplicationLanguage(languageTag: String?): ClientCommandResult = execute(
+        LauncherCommand.SetApplicationLanguage(languageTag),
+    )
+
+    private suspend fun execute(command: LauncherCommand): ClientCommandResult {
+        return LawnchairOperations.execute(command).toClientResult()
+    }
+}
+
+/**
+ * Business entry point. The host app subclasses this generated type and passes an instance to
+ * [ClientLauncherSdk.initialize]. Stable Lawnchair interfaces remain internal to this AAR.
+ */
+abstract class ClientLauncherEntry {
+    protected open fun minusOneLaunchPolicy(): ClientMinusOneLaunchPolicy =
+        ClientMinusOneLaunchPolicy.Desktop
+
+    @Composable
+    protected abstract fun renderMinusOne(scope: ClientMinusOneScope, modifier: Modifier)
+
+    protected open suspend fun loadDesktopItems(): List<ClientDesktopItem>? = null
+
+    protected open suspend fun onDesktopItemAction(itemId: String, actionId: String) = Unit
+
+    protected open fun iconClickInterceptionEnabled(): Boolean = false
+
+    protected open suspend fun onLauncherIconClick(
+        request: ClientLauncherIconClickRequest,
+    ): ClientLauncherIconClickDecision = ClientLauncherIconClickDecision.Proceed
+
+    @get:JvmSynthetic
+    internal val sdkMinusOne: MinusOneExtension = object : MinusOneExtension {
+        override val launchPolicy: MinusOneLaunchPolicy
+            get() = when (minusOneLaunchPolicy()) {
+                ClientMinusOneLaunchPolicy.Desktop -> MinusOneLaunchPolicy.Desktop
+                ClientMinusOneLaunchPolicy.MinusOneOnColdStart -> MinusOneLaunchPolicy.MinusOneOnColdStart
+            }
+
+        @Composable
+        override fun Content(scope: MinusOneScope, modifier: Modifier) {
+            renderMinusOne(ClientMinusOneScope(scope), modifier)
+        }
+    }
+
+    @get:JvmSynthetic
+    internal val sdkDesktopItems: DesktopItemsExtension = object : DesktopItemsExtension {
+        override suspend fun getSnapshot(): DesktopItemsSnapshot {
+            val items = loadDesktopItems() ?: return DesktopItemsSnapshot.Unavailable
+            return DesktopItemsSnapshot.Ready(items.map(ClientDesktopItem::toSdkSpec))
+        }
+
+        override suspend fun onAction(event: DesktopItemActionEvent) {
+            onDesktopItemAction(event.itemId, event.actionId)
+        }
+    }
+
+    @get:JvmSynthetic
+    internal val sdkIconClickInterceptor: LauncherIconClickInterceptor?
+        get() {
+            if (!iconClickInterceptionEnabled()) return null
+            return LauncherIconClickInterceptor { request ->
+                when (onLauncherIconClick(request.toClientRequest())) {
+                    ClientLauncherIconClickDecision.Proceed -> LauncherIconClickDecision.Proceed
+                    ClientLauncherIconClickDecision.Consume -> LauncherIconClickDecision.Consume
+                }
+            }
+        }
+}
+
+class ClientMinusOneScope internal constructor(private val delegate: MinusOneScope) {
+    val phase: ClientMinusOnePhase
+        get() = when (delegate.state.phase) {
+            MinusOnePhase.Closed -> ClientMinusOnePhase.Closed
+            MinusOnePhase.Opening -> ClientMinusOnePhase.Opening
+            MinusOnePhase.Opened -> ClientMinusOnePhase.Opened
+            MinusOnePhase.Closing -> ClientMinusOnePhase.Closing
+        }
+
+    val progress: Float
+        get() = delegate.state.progress
+
+    fun close(animated: Boolean = true): ClientCommandResult {
+        return delegate.close(animated.toMinusOneAnimation()).toClientResult()
+    }
+}
+
+private object ClientEntryRegistry {
+    @Volatile
+    private var installedEntry: ClientLauncherEntry? = null
+
+    fun install(entry: ClientLauncherEntry) {
+        installedEntry = entry
+    }
+
+    fun requireEntry(): ClientLauncherEntry = checkNotNull(installedEntry) {
+        "ClientLauncherSdk.initialize(application, entry) must be called before Launcher startup"
+    }
+}
+
+/** Internal reflection target referenced by the generated manifest metadata. */
+internal class ${CLIENT_ENTRY_ADAPTER} : LawnchairSdkEntry {
+    private val entry: ClientLauncherEntry
+        get() = ClientEntryRegistry.requireEntry()
+
+    override val minusOne: MinusOneExtension
+        get() = entry.sdkMinusOne
+
+    override val desktopItems: DesktopItemsExtension
+        get() = entry.sdkDesktopItems
+
+    override val iconClickInterceptor: LauncherIconClickInterceptor?
+        get() = entry.sdkIconClickInterceptor
+}
+
+enum class ClientMinusOnePhase {
+    Closed,
+    Opening,
+    Opened,
+    Closing,
+}
+
+enum class ClientMinusOneLaunchPolicy {
+    Desktop,
+    MinusOneOnColdStart,
+}
+
+data class ClientDesktopItem(
+    val id: String,
+    val title: String,
+    val iconResId: Int,
+    val clickAction: ClientDesktopClickAction,
+    val page: Int,
+    val column: Int,
+    val row: ClientDesktopRow,
+    val conflictPolicy: ClientDesktopConflictPolicy = ClientDesktopConflictPolicy.FindNearest,
+    val iconVersion: String = "",
+    val allowDragToDelete: Boolean = true,
+) {
+    internal fun toSdkSpec(): DesktopItemSpec = DesktopItemSpec(
+        id = id,
+        title = title,
+        iconResId = iconResId,
+        clickAction = when (val action = clickAction) {
+            is ClientDesktopClickAction.LaunchIntent -> DesktopItemClickAction.LaunchIntent(action.intent)
+            is ClientDesktopClickAction.ProviderAction -> DesktopItemClickAction.ProviderAction(action.actionId)
+        },
+        placement = DesktopItemPlacement(
+            page = page,
+            column = column,
+            row = when (val value = row) {
+                is ClientDesktopRow.FromTop -> DesktopItemRowAnchor.FromTop(value.index)
+                is ClientDesktopRow.FromBottom -> DesktopItemRowAnchor.FromBottom(value.index)
+            },
+            conflictPolicy = when (conflictPolicy) {
+                ClientDesktopConflictPolicy.FindNearest -> DesktopItemConflictPolicy.FindNearest
+                ClientDesktopConflictPolicy.Skip -> DesktopItemConflictPolicy.Skip
+            },
+        ),
+        iconVersion = iconVersion,
+        allowDragToDelete = allowDragToDelete,
+    )
+}
+
+sealed interface ClientDesktopClickAction {
+    data class LaunchIntent(val intent: Intent) : ClientDesktopClickAction
+
+    data class ProviderAction(val actionId: String) : ClientDesktopClickAction
+}
+
+sealed interface ClientDesktopRow {
+    data class FromTop(val index: Int) : ClientDesktopRow
+
+    data class FromBottom(val index: Int) : ClientDesktopRow
+}
+
+enum class ClientDesktopConflictPolicy {
+    FindNearest,
+    Skip,
+}
+
+data class ClientLauncherStateSnapshot(
+    val runtimeAvailable: Boolean,
+    val platformAdapterVersion: Int?,
+    val applicationLanguageTag: String?,
+    val minusOnePhase: ClientMinusOnePhase,
+    val minusOneProgress: Float,
+)
+
+sealed interface ClientLauncherEvent {
+    data class DesktopVisible(val source: ClientDesktopVisibleSource) : ClientLauncherEvent
+
+    data class LauncherIconClicked(val event: ClientLauncherIconClickEvent) : ClientLauncherEvent
+}
+
+enum class ClientDesktopVisibleSource {
+    ColdStart,
+    MinusOneReturn,
+    AllAppsReturn,
+    OtherUiReturn,
+}
+
+data class ClientLauncherIconClickEvent(
+    val title: String,
+    val targetPackageName: String?,
+    val isCurrentPackage: Boolean,
+    val desktopItemId: String?,
+)
+
+data class ClientLauncherIconClickRequest(
+    val activity: Activity,
+    val event: ClientLauncherIconClickEvent,
+)
+
+enum class ClientLauncherIconClickDecision {
+    Proceed,
+    Consume,
+}
+
+sealed interface ClientCommandResult {
+    data object Applied : ClientCommandResult
+    data object Queued : ClientCommandResult
+    data object AlreadyInRequestedState : ClientCommandResult
+    data class DesktopItemsReconciled(val added: Int, val updated: Int, val removed: Int) : ClientCommandResult
+    data class Rejected(val reason: String) : ClientCommandResult
+    data class Failed(val reason: String, val message: String?) : ClientCommandResult
+}
+
+private fun Boolean.toMinusOneAnimation(): MinusOneAnimation =
+    if (this) MinusOneAnimation.Animated else MinusOneAnimation.Immediate
+
+private fun Boolean.toDesktopRevealAnimation(): DesktopRevealAnimation =
+    if (this) DesktopRevealAnimation.Animated else DesktopRevealAnimation.Immediate
+
+private fun LauncherCommandResult.toClientResult(): ClientCommandResult = when (this) {
+    LauncherCommandResult.Applied -> ClientCommandResult.Applied
+    LauncherCommandResult.Queued -> ClientCommandResult.Queued
+    LauncherCommandResult.AlreadyInRequestedState -> ClientCommandResult.AlreadyInRequestedState
+    is LauncherCommandResult.DesktopItemsReconciled -> ClientCommandResult.DesktopItemsReconciled(added, updated, removed)
+    is LauncherCommandResult.Rejected -> ClientCommandResult.Rejected(reason.toExternalName())
+    is LauncherCommandResult.Failed -> ClientCommandResult.Failed(reason.toExternalName(), message)
+}
+
+private fun LauncherRejectReason.toExternalName(): String = name
+
+private fun LauncherFailureReason.toExternalName(): String = name
+
+private fun LauncherStateSnapshot.toClientState(): ClientLauncherStateSnapshot = ClientLauncherStateSnapshot(
+    runtimeAvailable = runtimeAvailable,
+    platformAdapterVersion = platformAdapterVersion,
+    applicationLanguageTag = applicationLanguageTag,
+    minusOnePhase = when (minusOne.phase) {
+        MinusOnePhase.Closed -> ClientMinusOnePhase.Closed
+        MinusOnePhase.Opening -> ClientMinusOnePhase.Opening
+        MinusOnePhase.Opened -> ClientMinusOnePhase.Opened
+        MinusOnePhase.Closing -> ClientMinusOnePhase.Closing
+    },
+    minusOneProgress = minusOne.progress,
+)
+
+private fun LauncherEvent.toClientEvent(): ClientLauncherEvent = when (this) {
+    is LauncherEvent.DesktopVisible -> ClientLauncherEvent.DesktopVisible(
+        when (source) {
+            DesktopVisibleSource.ColdStart -> ClientDesktopVisibleSource.ColdStart
+            DesktopVisibleSource.MinusOneReturn -> ClientDesktopVisibleSource.MinusOneReturn
+            DesktopVisibleSource.AllAppsReturn -> ClientDesktopVisibleSource.AllAppsReturn
+            DesktopVisibleSource.OtherUiReturn -> ClientDesktopVisibleSource.OtherUiReturn
+        },
+    )
+    is LauncherEvent.LauncherIconClicked -> ClientLauncherEvent.LauncherIconClicked(
+        ClientLauncherIconClickEvent(
+            title = event.title,
+            targetPackageName = event.targetPackageName,
+            isCurrentPackage = event.isCurrentPackage,
+            desktopItemId = event.desktopItemId,
+        ),
+    )
+}
+
+private fun LauncherIconClickRequest.toClientRequest(): ClientLauncherIconClickRequest =
+    ClientLauncherIconClickRequest(
+        activity = activity,
+        event = ClientLauncherIconClickEvent(
+            title = event.title,
+            targetPackageName = event.targetPackageName,
+            isCurrentPackage = event.isCurrentPackage,
+            desktopItemId = event.desktopItemId,
+        ),
+    )
