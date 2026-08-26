@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import concurrent.futures
 import html
 import json
 import os
@@ -44,6 +45,35 @@ SOURCE_REQUIRED_PATHS = (
     "launcher-core/build.gradle",
     "launcher-sdk-client/build.gradle",
     "sdk-local/build.gradle",
+)
+SDK_BASELINE_ARTIFACTS = (
+    "restriction-bypass",
+    "persian-date",
+    "iconloaderlib",
+    "searchuilib",
+    "animationlib",
+    "hidden-api",
+    "shared",
+    "plugin",
+    "plugincore",
+    "common",
+    "log",
+    "anim",
+    "unfold",
+    "viewcapture",
+    "compat-lib",
+    "compat-lib-vq",
+    "compat-lib-vr",
+    "compat-lib-vs",
+    "compat-lib-vt",
+    "compat-lib-vu",
+    "compat-lib-vv",
+    "androidx-lib",
+    "flags",
+    "wmshell",
+    "launcher-sdk-api",
+    "launcher-sdk-runtime",
+    "launcher-core",
 )
 
 
@@ -857,15 +887,24 @@ def resolve_package_version(
 
 def ensure_sdk_baseline_published(job: Job, workspace: SourceWorkspace) -> None:
     config = github_packages_config(job.github_username, job.github_token)
-    versions, _ = fetch_maven_versions(
-        "com.launcher.sdk",
-        "launcher-core",
-        config,
-    )
-    if job.sdk_version in versions:
+    def artifact_is_published(artifact_id: str) -> tuple[str, bool]:
+        versions, _ = fetch_maven_versions("com.launcher.sdk", artifact_id, config)
+        return artifact_id, job.sdk_version in versions
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        published_results = executor.map(artifact_is_published, SDK_BASELINE_ARTIFACTS)
+        published_artifacts = sorted(
+            artifact_id for artifact_id, is_published in published_results if is_published
+        )
+    missing_artifacts = sorted(set(SDK_BASELINE_ARTIFACTS) - set(published_artifacts))
+    if not missing_artifacts:
         append_log(job, f"SDK 基线 {job.sdk_version} 已存在，跳过重复发布")
         return
-    append_log(job, f"首次发布 SDK 基线与内部模块：{job.sdk_version}")
+    append_log(
+        job,
+        f"发布 SDK 基线 {job.sdk_version}：已存在 {len(published_artifacts)} 个，"
+        f"待补齐 {len(missing_artifacts)} 个",
+    )
     publish_args = [
         str(workspace.root / "gradlew"),
         "-p",
@@ -875,6 +914,7 @@ def ensure_sdk_baseline_published(job: Job, workspace: SourceWorkspace) -> None:
         f"-PPUBLISH_VERSION={job.sdk_version}",
         f"-PgithubPackagesOwner={config['owner']}",
         f"-PgithubPackagesRepository={config['repository']}",
+        f"-PalreadyPublishedArtifacts={','.join(published_artifacts)}",
         "--no-configuration-cache",
         "--console=plain",
     ]

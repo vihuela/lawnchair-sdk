@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 
 plugins {
     id "maven-publish"
@@ -41,6 +42,14 @@ final def githubPackagesUsername = providers.environmentVariable("GITHUB_PACKAGE
     .orElse(providers.environmentVariable("GITHUB_ACTOR"))
 final def githubPackagesToken = providers.environmentVariable("GITHUB_PACKAGES_TOKEN")
     .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+final def alreadyPublishedArtifacts = providers.gradleProperty("alreadyPublishedArtifacts")
+    .map { value -> value.split(",").findAll { !it.isBlank() } as Set }
+    .orElse([] as Set)
+final def githubArtifactId = { String value ->
+    value
+        .replaceAll(/([a-z0-9])([A-Z])/, '$1-$2')
+        .toLowerCase(Locale.ROOT)
+}
 
 configurations {
     vendorRestrictionBypass {
@@ -96,6 +105,13 @@ allprojects {
                         password = githubPackagesToken.getOrElse("")
                     }
                 }
+            }
+        }
+
+        tasks.withType(PublishToMavenRepository).configureEach { publishTask ->
+            onlyIf {
+                !(publishTask.publication instanceof MavenPublication) ||
+                    !alreadyPublishedArtifacts.get().contains(publishTask.publication.artifactId)
             }
         }
     }
@@ -233,9 +249,26 @@ subprojects { subproject ->
                     if (findByName("release") == null) {
                         register("release", MavenPublication) {
                             groupId = sdkPublishGroup.get()
-                            artifactId = subproject.name
+                            artifactId = githubArtifactId(subproject.name)
                             version = sdkPublishVersion.get()
                             from components.release
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    allprojects { sdkProject ->
+        sdkProject.plugins.withId("maven-publish") {
+            sdkProject.publishing.publications.withType(MavenPublication).configureEach { publication ->
+                publication.artifactId = githubArtifactId(publication.artifactId)
+                publication.pom.withXml {
+                    asNode().dependencies?.dependency?.each { dependency ->
+                        if (dependency.groupId.text() == sdkPublishGroup.get()) {
+                            dependency.artifactId[0].setValue(githubArtifactId(dependency.artifactId.text()))
                         }
                     }
                 }

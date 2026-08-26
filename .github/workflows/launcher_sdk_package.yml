@@ -19,7 +19,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: launcher-sdk-${{ inputs.package_name }}
+  group: launcher-sdk-publisher
   cancel-in-progress: false
 
 jobs:
