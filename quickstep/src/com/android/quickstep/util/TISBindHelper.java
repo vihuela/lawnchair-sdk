@@ -50,8 +50,11 @@ public class TISBindHelper implements ServiceConnection {
     private final Context mContext;
     private final Consumer<TISBinder> mConnectionCallback;
     private final ArrayList<Runnable> mPendingConnectedCallbacks = new ArrayList<>();
+    private final Intent mTisServiceIntent;
+    private final boolean mIsTisServiceAvailable;
 
     private short mConnectionAttempts;
+    private boolean mHasBindAttempt;
     private boolean mTisServiceBound;
     private boolean mIsConnected;
     private boolean mIsDestroyed;
@@ -60,7 +63,14 @@ public class TISBindHelper implements ServiceConnection {
     public TISBindHelper(Context context, Consumer<TISBinder> connectionCallback) {
         mContext = context;
         mConnectionCallback = connectionCallback;
-        internalBindToTIS();
+        mTisServiceIntent = new Intent(mContext, TouchInteractionService.class);
+        mIsTisServiceAvailable =
+                mContext.getPackageManager().resolveService(mTisServiceIntent, 0) != null;
+        if (mIsTisServiceAvailable) {
+            internalBindToTIS();
+        } else {
+            Log.i(TAG, "TIS service is not declared; skipping service binding");
+        }
     }
 
     @Override
@@ -133,7 +143,7 @@ public class TISBindHelper implements ServiceConnection {
      * Runs the given {@param r} runnable when the service is connected.
      */
     public void runOnBindToTouchInteractionService(Runnable r) {
-        if (mIsDestroyed) {
+        if (mIsDestroyed || !mIsTisServiceAvailable) {
             return;
         }
         if (mIsConnected) {
@@ -148,16 +158,25 @@ public class TISBindHelper implements ServiceConnection {
      * {@link #mConnectionRunnable}. Unbind via {@link #internalUnbindToTIS()}
      */
     private void internalBindToTIS() {
-        if (mIsDestroyed || mTisServiceBound) {
+        if (mIsDestroyed || !mIsTisServiceAvailable || mHasBindAttempt) {
             return;
         }
-        mTisServiceBound = mContext.bindService(new Intent(mContext, TouchInteractionService.class),
-                this, 0);
+        mHasBindAttempt = true;
+        try {
+            mTisServiceBound = mContext.bindService(mTisServiceIntent, this, 0);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to bind TIS service", e);
+            internalUnbindToTIS();
+            return;
+        }
         if (mTisServiceBound) {
             resetServiceBindRetryState();
             return;
         }
 
+        // ContextImpl can retain its ServiceDispatcher even when bindService returns false.
+        // Balance every bind attempt before retrying so an Activity context is never leaked.
+        internalUnbindToTIS();
         Log.w(TAG, "Retrying TIS Binder connection attempt: " + mConnectionAttempts);
         final long timeoutMs = (long) Math.min(
                 Math.scalb(BACKOFF_MILLIS, mConnectionAttempts), MAX_BACKOFF_MILLIS);
@@ -167,8 +186,13 @@ public class TISBindHelper implements ServiceConnection {
 
     /** See {@link #internalBindToTIS()} */
     private void internalUnbindToTIS() {
-        if (mTisServiceBound) {
-            mContext.unbindService(this);
+        if (mHasBindAttempt) {
+            try {
+                mContext.unbindService(this);
+            } catch (IllegalArgumentException e) {
+                Log.d(TAG, "TIS service was not registered");
+            }
+            mHasBindAttempt = false;
             mTisServiceBound = false;
         }
     }

@@ -26,6 +26,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 
 import androidx.test.filters.SmallTest;
 
@@ -38,12 +40,16 @@ import org.mockito.MockitoAnnotations;
 public class TISBindHelperTest {
 
     @Mock private Context mContext;
+    @Mock private PackageManager mPackageManager;
+    @Mock private ResolveInfo mResolveInfo;
 
     private TISBindHelper mHelper;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        when(mContext.getPackageManager()).thenReturn(mPackageManager);
+        when(mPackageManager.resolveService(any(Intent.class), eq(0))).thenReturn(mResolveInfo);
         when(mContext.bindService(
                         any(Intent.class), any(ServiceConnection.class), eq(0)))
                 .thenReturn(true);
@@ -73,5 +79,31 @@ public class TISBindHelperTest {
 
         verify(mContext, times(2)).bindService(any(Intent.class), eq(mHelper), eq(0));
         verify(mContext, times(1)).unbindService(mHelper);
+    }
+
+    @Test
+    public void serviceNotDeclared_doesNotAttemptBinding() {
+        mHelper.onDestroy();
+        when(mPackageManager.resolveService(any(Intent.class), eq(0))).thenReturn(null);
+
+        TISBindHelper unavailableHelper = new TISBindHelper(mContext, binder -> {});
+        unavailableHelper.runOnBindToTouchInteractionService(() -> {});
+        unavailableHelper.onDestroy();
+
+        verify(mContext, times(1))
+                .bindService(any(Intent.class), any(ServiceConnection.class), eq(0));
+    }
+
+    @Test
+    public void bindFailure_unregistersDispatcherBeforeRetry() {
+        mHelper.onDestroy();
+        when(mContext.bindService(
+                        any(Intent.class), any(ServiceConnection.class), eq(0)))
+                .thenReturn(false);
+
+        TISBindHelper failedHelper = new TISBindHelper(mContext, binder -> {});
+        failedHelper.onDestroy();
+
+        verify(mContext, times(1)).unbindService(failedHelper);
     }
 }
