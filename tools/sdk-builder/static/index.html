@@ -69,6 +69,35 @@
     details { color:var(--muted); font-size:12px; }
     summary { width:max-content; cursor:pointer; user-select:none; }
     pre { max-height:260px; overflow:auto; margin:10px 0 0; border:1px solid var(--line); border-radius:8px; padding:12px; color:#465049; background:var(--surface-soft); font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; }
+    .historySection { margin-top:30px; }
+    .historyHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:10px; }
+    .historyHeading { display:flex; align-items:baseline; gap:10px; }
+    .historyMeta { color:var(--muted); font-size:12px; }
+    .quietButton { height:32px; border:1px solid var(--line-strong); border-radius:7px; padding:0 11px; color:#39413b; background:var(--surface); cursor:pointer; font-size:12px; transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease),background var(--quick) var(--ease); }
+    .quietButton:hover:not(:disabled) { border-color:#9ba39c; color:var(--accent); background:#fafbf9; }
+    .quietButton:disabled { opacity:.45; cursor:not-allowed; }
+    .historyPanel { overflow:hidden; }
+    .historyTableWrap { overflow:auto; }
+    .historyTable { min-width:800px; }
+    .historyTable th,.historyTable td { min-width:0; padding:11px 14px; }
+    .historyTable th:nth-child(1),.historyTable td:nth-child(1) { width:100px; }
+    .historyTable th:nth-child(3),.historyTable td:nth-child(3) { width:170px; }
+    .historyTable th:nth-child(4),.historyTable td:nth-child(4) { width:90px; }
+    .historyTable th:nth-child(5),.historyTable td:nth-child(5) { width:120px; text-align:right; }
+    .historyPackage { border:0; padding:0; color:#24543d; background:transparent; cursor:pointer; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; text-align:left; }
+    .historyPackage:hover { text-decoration:underline; }
+    .historyRevision { display:block; margin-top:2px; color:var(--muted); font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .statusPill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:3px 8px; color:#58615a; background:#e8ebe8; font-size:11px; white-space:nowrap; }
+    .statusPill::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .statusPill.success { color:var(--accent); background:#e5f0e9; }
+    .statusPill.failure { color:var(--danger); background:var(--danger-soft); }
+    .statusPill.running { color:#98610f; background:#f7edd9; }
+    .statusPill.running::before { animation:pulse 1.4s var(--ease) infinite; }
+    .historyAction { color:var(--accent); text-decoration:none; font-size:12px; }
+    .historyAction:hover { text-decoration:underline; }
+    .historyEmpty { padding:34px 18px; color:var(--muted); text-align:center; }
+    .historyFooter { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); padding:10px 12px; color:var(--muted); font-size:12px; }
+    .historyPagination { display:flex; align-items:center; gap:8px; }
     #result { display:none; margin-top:30px; animation:panel-in var(--slow) var(--ease) both; }
     .resultHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; }
     h2 { margin:0; font-size:18px; letter-spacing:-.01em; }
@@ -110,6 +139,7 @@
     @keyframes workspace-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
     @keyframes panel-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
     @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes pulse { 50% { opacity:.35; transform:scale(.75); } }
     @media (max-width:720px) {
       .topbarInner,.workspace { width:min(calc(100% - 24px),1120px); }
       .workspace { padding-top:32px; }
@@ -119,6 +149,8 @@
       .summaryItem + .summaryItem { border-left:0; border-top:1px solid var(--line); }
       .dependencyItem { grid-template-columns:1fr; gap:6px; }
       .sourceMeta span { display:none; }
+      .historyHeading { display:block; }
+      .historyMeta { display:block; margin-top:2px; }
     }
     @media (prefers-reduced-motion:reduce) {
       *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
@@ -162,6 +194,28 @@
       <div class="progress"><div id="progressBar" class="bar"></div></div>
       <details><summary>查看构建日志</summary><pre id="buildLog"></pre></details>
     </section>
+    <section class="historySection" aria-labelledby="historyTitle">
+      <div class="historyHeader">
+        <div class="historyHeading"><h2 id="historyTitle">构建记录</h2><span id="historyMeta" class="historyMeta">读取中</span></div>
+        <button id="refreshHistory" class="quietButton" type="button">刷新</button>
+      </div>
+      <div class="panel historyPanel">
+        <div class="historyTableWrap">
+          <table class="historyTable">
+            <thead><tr><th>状态</th><th>Android 包名</th><th>开始时间</th><th>耗时</th><th>操作</th></tr></thead>
+            <tbody id="historyBody"><tr><td colspan="5" class="historyEmpty">正在读取 GitHub Actions 记录…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="historyFooter">
+          <span id="historyRange">—</span>
+          <div class="historyPagination">
+            <button id="historyPrevious" class="quietButton" type="button" disabled>上一页</button>
+            <span id="historyPage">第 1 页</span>
+            <button id="historyNext" class="quietButton" type="button" disabled>下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
     <section id="result">
       <div class="resultHeader"><h2>构建结果</h2><div id="abiValidation" class="abiStatus"></div></div>
       <div class="summaryGrid">
@@ -201,6 +255,9 @@
     let packageTouched = false;
     let publishTargetAvailable = false;
     let serverCredentialsConfigured = false;
+    let historyPage = 1;
+    let historyTotalPages = 1;
+    let historyRefreshTimer;
 
     function storageGet(key, fallback = '') {
       try { return localStorage.getItem(key) ?? fallback; }
@@ -255,6 +312,84 @@
       catch (_) {
         const preview = body.replace(/\s+/g, ' ').slice(0, 180);
         throw new Error(`构建服务返回了非 JSON 内容（HTTP ${response.status}）：${preview || '空响应'}`);
+      }
+    }
+
+    function formatHistoryTime(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '—';
+      return new Intl.DateTimeFormat('zh-CN', {
+        month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+      }).format(date).replaceAll('/', '-');
+    }
+
+    function formatDuration(seconds, startedAt, active) {
+      let total = Number(seconds);
+      if ((!Number.isFinite(total) || total < 0) && active && startedAt) {
+        total = Math.max(0, Math.round((Date.now() - Date.parse(startedAt)) / 1000));
+      }
+      if (!Number.isFinite(total) || total < 0) return '—';
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const remainder = total % 60;
+      if (hours) return `${hours}h ${minutes}m`;
+      if (minutes) return `${minutes}m ${remainder}s`;
+      return `${remainder}s`;
+    }
+
+    function historyStatus(record) {
+      if (record.status !== 'completed') return {label:record.status === 'queued' ? '排队中' : '构建中', className:'running'};
+      if (record.conclusion === 'success') return {label:'成功', className:'success'};
+      if (record.conclusion === 'cancelled') return {label:'已取消', className:'failure'};
+      if (record.conclusion === 'timed_out') return {label:'超时', className:'failure'};
+      return {label:'失败', className:'failure'};
+    }
+
+    function renderHistory(history) {
+      historyPage = history.page;
+      historyTotalPages = history.totalPages;
+      const records = Array.isArray(history.records) ? history.records : [];
+      $('historyMeta').textContent = `共 ${history.totalCount} 条 GitHub Actions 记录`;
+      $('historyPage').textContent = `第 ${history.page} / ${history.totalPages} 页`;
+      const start = history.totalCount ? (history.page - 1) * history.perPage + 1 : 0;
+      const end = Math.min(history.page * history.perPage, history.totalCount);
+      $('historyRange').textContent = history.totalCount ? `${start}–${end} / ${history.totalCount}` : '暂无记录';
+      $('historyPrevious').disabled = history.page <= 1;
+      $('historyNext').disabled = history.page >= history.totalPages;
+      $('historyBody').innerHTML = records.length ? records.map(record => {
+        const state = historyStatus(record);
+        const active = record.status !== 'completed';
+        const follow = active ? `<button class="quietButton" type="button" data-follow-job="${escapeHtml(record.id)}">跟踪</button>` : '';
+        return `<tr>
+          <td><span class="statusPill ${state.className}">${state.label}</span></td>
+          <td><button class="historyPackage" type="button" data-history-package="${escapeHtml(record.packageName)}">${escapeHtml(record.packageName)}</button><span class="historyRevision">${escapeHtml(record.sourceRevision || '等待 commit')}</span></td>
+          <td>${escapeHtml(formatHistoryTime(record.startedAt))}</td>
+          <td>${escapeHtml(formatDuration(record.durationSeconds, record.startedAt, active))}</td>
+          <td>${follow}${follow ? ' &nbsp; ' : ''}<a class="historyAction" href="${escapeHtml(record.actionsUrl)}" target="_blank" rel="noopener noreferrer">Actions</a></td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="5" class="historyEmpty">还没有通过网页创建的构建记录</td></tr>';
+      clearTimeout(historyRefreshTimer);
+      if (records.some(record => record.status !== 'completed')) {
+        historyRefreshTimer = setTimeout(() => loadHistory(historyPage), 10000);
+      }
+    }
+
+    async function loadHistory(page = historyPage) {
+      clearTimeout(historyRefreshTimer);
+      $('refreshHistory').disabled = true;
+      $('refreshHistory').textContent = '刷新中';
+      try {
+        const response = await fetch(`${API_BASE}/api/history?page=${page}`);
+        const history = await readJson(response);
+        if (!response.ok) throw new Error(history.error || `记录读取失败（HTTP ${response.status}）`);
+        renderHistory(history);
+      } catch (error) {
+        $('historyMeta').textContent = '读取失败';
+        $('historyBody').innerHTML = `<tr><td colspan="5" class="historyEmpty error">${escapeHtml(error.message)}</td></tr>`;
+      } finally {
+        $('refreshHistory').disabled = false;
+        $('refreshHistory').textContent = '刷新';
       }
     }
 
@@ -402,6 +537,7 @@
         const job = await readJson(response);
         if (!response.ok) throw new Error(job.error || `创建任务失败（HTTP ${response.status}）`);
         $('sourceVersion').textContent = `v${job.sdkVersion}`;
+        setTimeout(() => loadHistory(1), 1200);
         poll(job.id);
       } catch (error) { fail(error.message); }
     });
@@ -418,8 +554,8 @@
         }
         $('progressText').textContent = `${job.progress}%`; $('progressBar').style.width = `${job.progress}%`;
         $('buildLog').textContent = job.log.join('\n'); $('buildLog').scrollTop = $('buildLog').scrollHeight;
-        if (job.state === 'completed') { $('statusTitle').textContent = '构建并发布完成'; setBuilding(false); renderResult(job.result); return; }
-        if (job.state === 'failed') { fail(job.error || '构建失败'); return; }
+        if (job.state === 'completed') { $('statusTitle').textContent = '构建并发布完成'; setBuilding(false); renderResult(job.result); loadHistory(1); return; }
+        if (job.state === 'failed') { fail(job.error || '构建失败'); loadHistory(1); return; }
         pollTimer = setTimeout(() => poll(id), 3500);
       } catch (error) { fail(error.message); }
     }
@@ -455,7 +591,29 @@
       document.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
       $('functionsTable').hidden = button.dataset.tab !== 'functions'; $('classesTable').hidden = button.dataset.tab !== 'classes';
     }));
-    restorePersistedInputs(); loadConfig(); validateForm();
+    $('refreshHistory').addEventListener('click', () => loadHistory(historyPage));
+    $('historyPrevious').addEventListener('click', () => loadHistory(Math.max(1, historyPage - 1)));
+    $('historyNext').addEventListener('click', () => loadHistory(Math.min(historyTotalPages, historyPage + 1)));
+    $('historyBody').addEventListener('click', event => {
+      const packageButton = event.target.closest('[data-history-package]');
+      if (packageButton) {
+        $('packageName').value = packageButton.dataset.historyPackage;
+        $('packageName').dispatchEvent(new Event('input'));
+        $('packageName').scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+      }
+      const followButton = event.target.closest('[data-follow-job]');
+      if (followButton) {
+        clearTimeout(pollTimer);
+        $('statusCard').style.display = 'block';
+        $('statusTitle').textContent = '正在跟踪历史任务';
+        $('statusTitle').className = 'statusTitle';
+        $('statusText').textContent = '';
+        $('statusCard').scrollIntoView({behavior:'smooth', block:'center'});
+        poll(followButton.dataset.followJob);
+      }
+    });
+    restorePersistedInputs(); loadConfig(); loadHistory(1); validateForm();
   </script>
 </body>
 </html>

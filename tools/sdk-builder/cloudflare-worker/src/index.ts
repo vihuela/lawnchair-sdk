@@ -18,6 +18,11 @@ interface WorkflowRun {
   status: "queued" | "in_progress" | "completed" | "waiting" | "requested" | "pending";
   conclusion: string | null;
   created_at: string;
+  updated_at: string;
+  run_started_at: string | null;
+  head_sha: string;
+  head_branch: string | null;
+  run_number: number;
 }
 
 interface Artifact {
@@ -70,17 +75,66 @@ async function readRequestPackage(request: Request): Promise<string> {
   return packageName;
 }
 
-async function listRuns(env: Env): Promise<WorkflowRun[]> {
+async function listRunsPage(env: Env, page = 1, perPage = 50): Promise<{ runs: WorkflowRun[]; totalCount: number }> {
   const workflow = encodeURIComponent(env.GITHUB_WORKFLOW);
-  const query = new URLSearchParams({ event: "workflow_dispatch", per_page: "50" });
+  const query = new URLSearchParams({ event: "workflow_dispatch", page: String(page), per_page: String(perPage) });
   const response = await githubFetch(env, repoPath(env, `/actions/workflows/${workflow}/runs?${query}`));
-  const payload = await response.json() as { workflow_runs?: WorkflowRun[] };
-  return payload.workflow_runs || [];
+  const payload = await response.json() as { total_count?: number; workflow_runs?: WorkflowRun[] };
+  return { runs: payload.workflow_runs || [], totalCount: payload.total_count || 0 };
+}
+
+async function listRuns(env: Env): Promise<WorkflowRun[]> {
+  return (await listRunsPage(env)).runs;
 }
 
 async function findRun(env: Env, jobId: string): Promise<WorkflowRun | undefined> {
   const runs = await listRuns(env);
   return runs.find(run => run.display_title?.endsWith(`· ${jobId}`));
+}
+
+function parseRunTitle(displayTitle: string): { packageName: string; jobId: string } | null {
+  const match = displayTitle.match(/^Launcher SDK · (.+) · ([0-9a-f]{12})$/);
+  if (!match || !PACKAGE_PATTERN.test(match[1])) return null;
+  return { packageName: match[1], jobId: match[2] };
+}
+
+async function historyResponse(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const requestedPage = Number(url.searchParams.get("page") || "1");
+  const page = Number.isInteger(requestedPage) ? Math.min(Math.max(requestedPage, 1), 100) : 1;
+  const perPage = 20;
+  const { runs, totalCount } = await listRunsPage(env, page, perPage);
+  const records = runs.flatMap(run => {
+    const identity = parseRunTitle(run.display_title || "");
+    if (!identity) return [];
+    const startedAt = run.run_started_at || run.created_at;
+    const endedAt = run.status === "completed" ? run.updated_at : null;
+    const durationSeconds = endedAt
+      ? Math.max(0, Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 1000))
+      : null;
+    return [{
+      id: identity.jobId,
+      runId: run.id,
+      runNumber: run.run_number,
+      packageName: identity.packageName,
+      status: run.status,
+      conclusion: run.conclusion,
+      createdAt: run.created_at,
+      startedAt,
+      endedAt,
+      durationSeconds,
+      sourceRevision: run.head_sha?.slice(0, 12) || null,
+      sourceBranch: run.head_branch,
+      actionsUrl: run.html_url,
+    }];
+  });
+  return json({
+    page,
+    perPage,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / perPage)),
+    records,
+  });
 }
 
 async function findArtifact(env: Env, runId: number, jobId: string): Promise<Artifact | undefined> {
@@ -265,6 +319,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/api/config") return configResponse(env);
+      if (request.method === "GET" && url.pathname === "/api/history") return historyResponse(request, env);
       if (request.method === "POST" && url.pathname === "/api/package-version") return packageVersionResponse(request, env);
       if (request.method === "POST" && url.pathname === "/api/build") return buildResponse(request, env, context);
 

@@ -96,6 +96,10 @@ Packages 发布和报告提取都在该任务工作区内完成；报告复制�
 校验 Java 21、Android 36.1、Build Tools 36.1.0、Gradle Wrapper、源码文件与磁盘空间，
 再构建、校验并发布 GitHub Packages。
 
+网页的“构建记录”通过 `/api/history` 分页读取该工作流的全部 `workflow_dispatch` 记录，
+展示任意业务包名的状态、开始时间、耗时、源码 Commit 和 Actions 入口；运行中的任务会
+自动刷新，也可以从记录中继续跟踪进度。
+
 Cloudflare 只保存用于触发和读取私有仓库 Actions 的长期凭证，且必须使用 Worker Secret：
 
 ```bash
