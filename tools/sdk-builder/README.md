@@ -98,7 +98,8 @@ Packages 发布和报告提取都在该任务工作区内完成；报告复制�
 
 网页的“构建记录”通过 `/api/history` 分页读取该工作流的全部 `workflow_dispatch` 记录，
 展示任意业务包名的状态、开始时间、耗时、源码 Commit 和 Actions 入口；运行中的任务会
-自动刷新，也可以从记录中继续跟踪进度。
+自动刷新，也可以从记录中继续跟踪进度。成功记录可在页面中重新打开依赖坐标、函数映射
+和类型映射。
 
 Cloudflare 只保存用于触发和读取私有仓库 Actions 的长期凭证，且必须使用 Worker Secret：
 
@@ -116,7 +117,7 @@ npm run deploy
 
 线上页面可公开访问。Worker 对包名做白名单式格式校验、同一 IP 30 秒冷却，并将全局并发
 构建限制为 3 个；如后续需要更严格的防滥用，可在创建任务前增加 Cloudflare Turnstile。
-仅含状态结果的 Actions artifact 保留 1 天；最终 Maven 产物只发布到 GitHub Packages，
+仅含状态和映射报告的 Actions artifact 保留 90 天；最终 Maven 产物只发布到 GitHub Packages，
 并按仓库权限长期保存。
 
 也可以直接验证底层构建：

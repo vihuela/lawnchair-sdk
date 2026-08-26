@@ -291,7 +291,15 @@ async function jobResponse(env: Env, jobId: string): Promise<Response> {
   const artifact = await findArtifact(env, run.id, jobId);
   if (!artifact) {
     if (run.conclusion === "success") {
-      return json({ id: jobId, state: "running", progress: 98, message: "等待 CI 结果归档", log: progress.log, actionsUrl: run.html_url });
+      return json({
+        id: jobId,
+        state: "completed",
+        progress: 100,
+        message: "构建成功，但详细报告已超过保留期",
+        resultAvailable: false,
+        log: progress.log,
+        actionsUrl: run.html_url,
+      });
     }
     return json({ id: jobId, state: "failed", progress: 100, message: "GitHub Actions 构建失败", error: `CI 结论：${run.conclusion || "unknown"}`, log: progress.log, actionsUrl: run.html_url });
   }

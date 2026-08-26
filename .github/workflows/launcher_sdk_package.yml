@@ -81,4 +81,4 @@ jobs:
           name: launcher-sdk-${{ inputs.job_id }}
           path: tools/sdk-builder/output/${{ inputs.job_id }}/downloads/job.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 90

@@ -21,7 +21,6 @@
     .brand { display:flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em; }
     .brandMark { width:10px; height:10px; border-radius:3px; background:var(--accent); }
     .sourceMeta { display:flex; align-items:center; gap:14px; color:var(--muted); font-size:13px; }
-    .sourceMeta strong { margin-left:6px; color:var(--text); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
     .sourceRepository { max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .publishTarget { padding-left:14px; border-left:1px solid var(--line-strong); }
     .publishTarget.ready { color:var(--accent); }
@@ -162,7 +161,6 @@
     <div class="topbarInner">
       <div class="brand"><span class="brandMark" aria-hidden="true"></span>Launcher SDK Builder</div>
       <div class="sourceMeta">
-        <span>SDK 基线<strong id="sourceVersion">读取中</strong></span>
         <span id="sourceRepository" class="sourceRepository">读取源码配置</span>
         <span id="publishTarget" class="publishTarget">读取发布配置</span>
       </div>
@@ -361,12 +359,14 @@
         const state = historyStatus(record);
         const active = record.status !== 'completed';
         const follow = active ? `<button class="quietButton" type="button" data-follow-job="${escapeHtml(record.id)}">跟踪</button>` : '';
+        const viewResult = record.conclusion === 'success' ? `<button class="quietButton" type="button" data-result-job="${escapeHtml(record.id)}">查看结果</button>` : '';
+        const primaryAction = follow || viewResult;
         return `<tr>
           <td><span class="statusPill ${state.className}">${state.label}</span></td>
           <td><button class="historyPackage" type="button" data-history-package="${escapeHtml(record.packageName)}">${escapeHtml(record.packageName)}</button><span class="historyRevision">${escapeHtml(record.sourceRevision || '等待 commit')}</span></td>
           <td>${escapeHtml(formatHistoryTime(record.startedAt))}</td>
           <td>${escapeHtml(formatDuration(record.durationSeconds, record.startedAt, active))}</td>
-          <td>${follow}${follow ? ' &nbsp; ' : ''}<a class="historyAction" href="${escapeHtml(record.actionsUrl)}" target="_blank" rel="noopener noreferrer">Actions</a></td>
+          <td>${primaryAction}${primaryAction ? ' &nbsp; ' : ''}<a class="historyAction" href="${escapeHtml(record.actionsUrl)}" target="_blank" rel="noopener noreferrer">Actions</a></td>
         </tr>`;
       }).join('') : '<tr><td colspan="5" class="historyEmpty">还没有通过网页创建的构建记录</td></tr>';
       clearTimeout(historyRefreshTimer);
@@ -393,13 +393,34 @@
       }
     }
 
+    async function loadHistoryResult(jobId, button) {
+      const previousLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = '读取中';
+      try {
+        const response = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+        const job = await readJson(response);
+        if (!response.ok) throw new Error(job.error || `结果读取失败（HTTP ${response.status}）`);
+        if (!job.result) throw new Error(job.message || '该记录没有可查看的详细报告');
+        renderResult(job.result);
+        $('result').scrollIntoView({behavior:'smooth', block:'start'});
+      } catch (error) {
+        $('statusCard').style.display = 'block';
+        $('statusTitle').textContent = '历史结果不可用';
+        $('statusTitle').className = 'statusTitle error';
+        $('statusText').textContent = error.message;
+        $('statusCard').scrollIntoView({behavior:'smooth', block:'center'});
+      } finally {
+        button.disabled = false;
+        button.textContent = previousLabel;
+      }
+    }
+
     async function loadConfig() {
       try {
         const response = await fetch(`${API_BASE}/api/config`);
         const config = await readJson(response);
         if (!response.ok) throw new Error(config.error || '版本读取失败');
-        $('sourceVersion').textContent = `v${config.sdkVersion}`;
-        $('sourceVersion').title = `读取自 ${config.versionSource}`;
         $('sourceRepository').textContent = config.source?.display || '当前本地工作区';
         $('sourceRepository').title = config.buildBackend === 'github-actions'
           ? `每次构建由 GitHub Actions checkout ${config.source.owner}/${config.source.repository} 的 ${config.source.ref}`
@@ -419,7 +440,6 @@
         validateForm();
         scheduleVersionLookup();
       } catch (_) {
-        $('sourceVersion').textContent = '读取失败';
         $('sourceRepository').textContent = '源码配置读取失败';
         $('publishTarget').textContent = '发布配置读取失败';
         $('publishTarget').className = 'publishTarget missing';
@@ -536,7 +556,6 @@
         const response = await fetch(`${API_BASE}/api/build`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestPayload())});
         const job = await readJson(response);
         if (!response.ok) throw new Error(job.error || `创建任务失败（HTTP ${response.status}）`);
-        $('sourceVersion').textContent = `v${job.sdkVersion}`;
         setTimeout(() => loadHistory(1), 1200);
         poll(job.id);
       } catch (error) { fail(error.message); }
@@ -600,6 +619,11 @@
         $('packageName').value = packageButton.dataset.historyPackage;
         $('packageName').dispatchEvent(new Event('input'));
         $('packageName').scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+      }
+      const resultButton = event.target.closest('[data-result-job]');
+      if (resultButton) {
+        loadHistoryResult(resultButton.dataset.resultJob, resultButton);
         return;
       }
       const followButton = event.target.closest('[data-follow-job]');
