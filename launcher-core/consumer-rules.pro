@@ -29,6 +29,7 @@
 -dontwarn android.app.ITaskStackListener
 -dontwarn android.app.TaskStackListener
 -dontwarn android.app.WindowConfiguration
+-dontwarn android.appwidget.AppWidgetHost$AppWidgetHostListener
 -dontwarn android.app.prediction.AppPredictor$Callback
 -dontwarn android.app.prediction.AppTarget
 -dontwarn android.app.search.Query
@@ -37,6 +38,8 @@
 -dontwarn android.app.search.SearchSession
 -dontwarn android.app.search.SearchTarget
 -dontwarn android.app.search.SearchUiManager
+-dontwarn android.content.IIntentSender$Stub
+-dontwarn android.content.IIntentSender
 -dontwarn android.content.pm.IPackageManager
 -dontwarn android.content.pm.LauncherApps$AppUsageLimit
 -dontwarn android.content.pm.ParceledListSlice
@@ -45,6 +48,7 @@
 -dontwarn android.graphics.CanvasProperty
 -dontwarn android.graphics.HardwareRenderer$FrameDrawingCallback
 -dontwarn android.graphics.animation.RenderNodeAnimator
+-dontwarn android.hardware.input.InputManagerGlobal
 -dontwarn android.media.permission.SafeCloseable
 -dontwarn android.os.IRemoteCallback$Stub
 -dontwarn android.os.IRemoteCallback
@@ -59,7 +63,10 @@
 -dontwarn android.util.MathUtils
 -dontwarn android.util.PathParser
 -dontwarn android.util.RotationUtils
+-dontwarn android.view.BatchedInputEventReceiver
+-dontwarn android.view.CompositionSamplingListener
 -dontwarn android.view.CrossWindowBlurListeners
+-dontwarn android.view.DisplayInfo
 -dontwarn android.view.GhostView
 -dontwarn android.view.IAppTransitionAnimationSpecsFuture$Stub
 -dontwarn android.view.IAppTransitionAnimationSpecsFuture
@@ -69,7 +76,11 @@
 -dontwarn android.view.IRemoteAnimationFinishedCallback
 -dontwarn android.view.IRemoteAnimationRunner$Stub
 -dontwarn android.view.IRemoteAnimationRunner
+-dontwarn android.view.IRotationWatcher$Stub
+-dontwarn android.view.IRotationWatcher
 -dontwarn android.view.IWindowManager
+-dontwarn android.view.InputChannel
+-dontwarn android.view.InputMonitor
 -dontwarn android.view.RemoteAnimationAdapter
 -dontwarn android.view.RemoteAnimationDefinition
 -dontwarn android.view.RemoteAnimationTarget
@@ -77,12 +88,14 @@
 -dontwarn android.view.SyncRtSurfaceTransactionApplier$SurfaceParams$Builder
 -dontwarn android.view.SyncRtSurfaceTransactionApplier$SurfaceParams
 -dontwarn android.view.SyncRtSurfaceTransactionApplier
+-dontwarn android.view.SurfaceSession
 -dontwarn android.view.ThreadedRenderer
 -dontwarn android.view.ViewRootImpl$SurfaceChangedCallback
 -dontwarn android.view.ViewRootImpl
 -dontwarn android.view.ViewTreeObserver$OnComputeInternalInsetsListener
 -dontwarn android.view.WindowManagerGlobal
 -dontwarn android.view.animation.BackGestureInterpolator
+-dontwarn android.widget.RemoteViews$InteractionHandler
 -dontwarn android.widget.RemoteViews$ColorResources
 -dontwarn android.window.BackProgressAnimator
 -dontwarn android.window.IDumpCallback$Stub
@@ -98,13 +111,23 @@
 -dontwarn com.android.internal.annotations.VisibleForTesting
 -dontwarn com.android.internal.colorextraction.ColorExtractor$GradientColors
 -dontwarn com.android.internal.colorextraction.types.Tonal
+-dontwarn com.android.internal.graphics.ColorUtils
+-dontwarn com.android.internal.jank.InteractionJankMonitor$Configuration$Builder
 -dontwarn com.android.internal.jank.InteractionJankMonitor
 -dontwarn com.android.internal.logging.InstanceId
 -dontwarn com.android.internal.logging.InstanceIdSequence
+-dontwarn com.android.internal.logging.UiEventLogger$UiEventEnum
+-dontwarn com.android.internal.logging.UiEventLogger
+-dontwarn com.android.internal.logging.UiEventLoggerImpl
 -dontwarn com.android.internal.os.SomeArgs
+-dontwarn com.android.internal.policy.GestureNavigationSettingsObserver
 -dontwarn com.android.internal.policy.ScreenDecorationsUtils
 -dontwarn com.android.internal.util.AnnotationValidations
 -dontwarn com.android.internal.util.ArrayUtils
+-dontwarn com.android.internal.util.LatencyTracker
+-dontwarn com.android.internal.util.ScreenshotRequest$Builder
+-dontwarn com.android.internal.util.ScreenshotRequest
+-dontwarn com.android.internal.view.RotationPolicy
 -dontwarn com.android.launcher3.icons.BitmapInfo$BitmapInfoFlags
 -dontwarn com.android.window.flags.Flags
 
