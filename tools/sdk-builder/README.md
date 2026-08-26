@@ -88,10 +88,30 @@ Packages 发布和报告提取都在该任务工作区内完成；报告复制�
 本地自动化测试可以用服务端环境变量 `GITHUB_SOURCE_ARCHIVE_URL` 覆盖下载地址；该地址
 不接受网页输入，避免构建服务被用于请求任意网络资源。线上不要配置 `file://` 地址。
 
-Android 构建 API 必须运行在包含 JDK、Android SDK、Gradle 和足够内存/磁盘的构建机中，
-不能直接运行在 Cloudflare Worker。当前部署通过 Cloudflare Tunnel 把 HTTPS 域名转发到
-只监听 `127.0.0.1` 的构建服务，并在 Cloudflare Access 外层限制访问。构建机离线时服务
-不可用；若需要 24 小时运行，可把相同服务和 Tunnel 配置迁移到常驻 Linux 构建机。
+## Cloudflare + GitHub Actions 部署
+
+线上网页和 API 位于 `tools/sdk-builder/cloudflare-worker`。Cloudflare Worker 负责静态页面、
+包名校验、版本查询、CI 触发与状态/产物代理；Android 编译在 GitHub 托管 Runner 中执行，
+不依赖开发者电脑。`.github/workflows/launcher_sdk_package.yml` 会 checkout 私有仓库，安装并
+校验 Java 21、Android 36.1、Build Tools 36.1.0、Gradle Wrapper、源码文件与磁盘空间，
+再构建、校验并发布 GitHub Packages。
+
+Cloudflare 只保存用于触发和读取私有仓库 Actions 的长期凭证，且必须使用 Worker Secret：
+
+```bash
+cd tools/sdk-builder/cloudflare-worker
+npx wrangler secret put GITHUB_USERNAME
+npx wrangler secret put GITHUB_TOKEN
+npm run deploy
+```
+
+不要把凭证放在 `wrangler.jsonc`、静态 HTML 或普通 `vars` 中。CI 发布使用仓库自动生成且
+随任务失效的 `GITHUB_TOKEN`，工作流仅授予 `contents: read`、`packages: write` 和
+`actions: read`。网页不会拿到任何 GitHub 凭证；CI artifact 也由 Worker 鉴权下载并转发。
+
+线上页面可公开访问。Worker 对包名做白名单式格式校验、同一 IP 30 秒冷却，并将全局并发
+构建限制为 3 个；如后续需要更严格的防滥用，可在创建任务前增加 Cloudflare Turnstile。
+Actions artifact 保留 7 天，GitHub Packages 中的 Maven 版本按仓库权限长期保存。
 
 也可以直接验证底层构建：
 

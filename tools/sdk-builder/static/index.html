@@ -266,10 +266,14 @@
         $('sourceVersion').textContent = `v${config.sdkVersion}`;
         $('sourceVersion').title = `读取自 ${config.versionSource}`;
         $('sourceRepository').textContent = config.source?.display || '当前本地工作区';
-        $('sourceRepository').title = config.source?.mode === 'github'
+        $('sourceRepository').title = config.buildBackend === 'github-actions'
+          ? `每次构建由 GitHub Actions checkout ${config.source.owner}/${config.source.repository} 的 ${config.source.ref}`
+          : config.source?.mode === 'github'
           ? `每个构建任务都会重新下载 ${config.source.owner}/${config.source.repository} 的 ${config.source.ref}`
           : '构建任务直接使用当前服务所在的本地源码工作区';
-        $('introText').textContent = config.source?.mode === 'github'
+        $('introText').textContent = config.buildBackend === 'github-actions'
+          ? '输入业务 Android 包名；GitHub Actions 会拉取私有源码，在托管 Runner 中完成环境校验、R8 构建和 GitHub Packages 发布，结果自动返回本页。'
+          : config.source?.mode === 'github'
           ? '输入业务 Android 包名；服务端会拉取指定 GitHub 源码并创建独立工作区，完成 R8 构建、校验和发布后自动清理。'
           : '输入业务 Android 包名，使用当前本地源码生成 R8 AAR，通过校验后发布到 GitHub Packages。';
         publishTargetAvailable = Boolean(config.githubPackages?.url);
@@ -416,7 +420,7 @@
         $('buildLog').textContent = job.log.join('\n'); $('buildLog').scrollTop = $('buildLog').scrollHeight;
         if (job.state === 'completed') { $('statusTitle').textContent = '构建并发布完成'; setBuilding(false); renderResult(job.result); return; }
         if (job.state === 'failed') { fail(job.error || '构建失败'); return; }
-        pollTimer = setTimeout(() => poll(id), 900);
+        pollTimer = setTimeout(() => poll(id), 3500);
       } catch (error) { fail(error.message); }
     }
 
