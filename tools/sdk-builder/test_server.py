@@ -103,5 +103,49 @@ class SourceWorkspaceTest(unittest.TestCase):
         self.assertEqual("", job.github_token)
 
 
+class ComposeStabilityValidationTest(unittest.TestCase):
+    def test_accepts_preserved_stable_field_name(self) -> None:
+        comparison = {
+            "classes": [{"source": "source.Entry", "preR8": "source.Entry", "r8": "r8.Entry"}],
+        }
+        declarations = {
+            "source.Entry": ["public static final int $stable"],
+            "r8.Entry": ["public static final int $stable"],
+        }
+        with patch.object(
+            SERVER,
+            "javap_declarations",
+            side_effect=lambda _jar, class_name: declarations[class_name],
+        ):
+            checked = SERVER.validate_compose_stability_fields(
+                comparison,
+                Path("pre.jar"),
+                Path("r8.jar"),
+            )
+        self.assertEqual(1, checked)
+
+    def test_rejects_obfuscated_stable_field_name(self) -> None:
+        comparison = {
+            "classes": [{"source": "source.Entry", "preR8": "source.Entry", "r8": "r8.Entry"}],
+        }
+        declarations = {
+            "source.Entry": ["public static final int $stable"],
+            "r8.Entry": ["public static final int randomized"],
+        }
+        with (
+            patch.object(
+                SERVER,
+                "javap_declarations",
+                side_effect=lambda _jar, class_name: declarations[class_name],
+            ),
+            self.assertRaisesRegex(RuntimeError, r"Compose \$stable 字段未保留原名"),
+        ):
+            SERVER.validate_compose_stability_fields(
+                comparison,
+                Path("pre.jar"),
+                Path("r8.jar"),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

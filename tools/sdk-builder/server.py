@@ -636,7 +636,7 @@ def parse_mapping(mapping_file: Path) -> tuple[dict[str, str], dict[tuple[str, s
     return class_map, methods
 
 
-def javap_lines(jar: Path, class_name: str) -> list[str]:
+def javap_declarations(jar: Path, class_name: str) -> list[str]:
     completed = subprocess.run(
         ["javap", "-classpath", str(jar), "-protected", class_name],
         cwd=ROOT,
@@ -647,7 +647,11 @@ def javap_lines(jar: Path, class_name: str) -> list[str]:
     )
     if completed.returncode != 0:
         return []
-    return [line.strip().removesuffix(";") for line in completed.stdout.splitlines() if "(" in line]
+    return [line.strip().removesuffix(";") for line in completed.stdout.splitlines()]
+
+
+def javap_lines(jar: Path, class_name: str) -> list[str]:
+    return [line for line in javap_declarations(jar, class_name) if "(" in line]
 
 
 def select_javap_methods(lines: list[str], method_name: str) -> list[str]:
@@ -782,6 +786,23 @@ def validate_business_abi(comparison: dict) -> dict:
         "forbiddenTypePrefixes": list(FORBIDDEN_BUSINESS_TYPE_PREFIXES),
         "message": "所有业务引用类均已随机改名，业务函数签名未泄露固定 Lawnchair SDK 类型。",
     }
+
+
+def validate_compose_stability_fields(comparison: dict, pre_jar: Path, r8_jar: Path) -> int:
+    """Ensure R8 preserves Compose's convention-based public ``$stable`` field name."""
+    stable_field = "public static final int $stable"
+    checked_count = 0
+    violations: list[str] = []
+    for row in comparison["classes"]:
+        if stable_field not in javap_declarations(pre_jar, row["preR8"]):
+            continue
+        checked_count += 1
+        if stable_field not in javap_declarations(r8_jar, row["r8"]):
+            violations.append(f"Compose $stable 字段未保留原名：{row['source']} -> {row['r8']}")
+
+    if violations:
+        raise RuntimeError("Compose 稳定性 ABI 校验失败：\n" + "\n".join(violations))
+    return checked_count
 
 
 def write_report_html(path: Path, package_name: str, comparison: dict) -> None:
@@ -1113,6 +1134,9 @@ def build_job(job: Job) -> None:
             extract_classes_jar(r8_aar, r8_jar)
             comparison = build_comparison(job.package_name, pre_jar, r8_jar, mapping)
             abi_validation = validate_business_abi(comparison)
+            stable_field_count = validate_compose_stability_fields(comparison, pre_jar, r8_jar)
+            abi_validation["preservedComposeStableFieldCount"] = stable_field_count
+            abi_validation["message"] += f" 已保留 {stable_field_count} 个 Compose $stable 字段原名。"
             update_job(job, progress=80, message="确认并发布 SDK 基线模块")
             ensure_sdk_baseline_published(job, workspace)
             update_job(job, progress=92, message="发布包名专属依赖")
