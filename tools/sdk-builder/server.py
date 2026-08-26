@@ -805,6 +805,25 @@ def validate_compose_stability_fields(comparison: dict, pre_jar: Path, r8_jar: P
     return checked_count
 
 
+def validate_kotlin_object_instance_fields(comparison: dict, pre_jar: Path, r8_jar: Path) -> int:
+    """Ensure R8 preserves Kotlin object fields referenced by host Kotlin bytecode as ``INSTANCE``."""
+    instance_field_pattern = re.compile(r"^public static final \S+ INSTANCE$")
+    checked_count = 0
+    violations: list[str] = []
+    for row in comparison["classes"]:
+        pre_declarations = javap_declarations(pre_jar, row["preR8"])
+        if not any(instance_field_pattern.fullmatch(line) for line in pre_declarations):
+            continue
+        checked_count += 1
+        r8_declarations = javap_declarations(r8_jar, row["r8"])
+        if not any(instance_field_pattern.fullmatch(line) for line in r8_declarations):
+            violations.append(f"Kotlin object INSTANCE 字段未保留原名：{row['source']} -> {row['r8']}")
+
+    if violations:
+        raise RuntimeError("Kotlin object ABI 校验失败：\n" + "\n".join(violations))
+    return checked_count
+
+
 def write_report_html(path: Path, package_name: str, comparison: dict) -> None:
     def grouped_rows(rows: list[dict], column_count: int, render_row) -> str:
         groups: dict[str, list[dict]] = {}
@@ -1135,8 +1154,13 @@ def build_job(job: Job) -> None:
             comparison = build_comparison(job.package_name, pre_jar, r8_jar, mapping)
             abi_validation = validate_business_abi(comparison)
             stable_field_count = validate_compose_stability_fields(comparison, pre_jar, r8_jar)
+            instance_field_count = validate_kotlin_object_instance_fields(comparison, pre_jar, r8_jar)
             abi_validation["preservedComposeStableFieldCount"] = stable_field_count
-            abi_validation["message"] += f" 已保留 {stable_field_count} 个 Compose $stable 字段原名。"
+            abi_validation["preservedKotlinObjectInstanceFieldCount"] = instance_field_count
+            abi_validation["message"] += (
+                f" 已保留 {stable_field_count} 个 Compose $stable 字段原名，"
+                f"以及 {instance_field_count} 个 Kotlin object INSTANCE 字段原名。"
+            )
             update_job(job, progress=80, message="确认并发布 SDK 基线模块")
             ensure_sdk_baseline_published(job, workspace)
             update_job(job, progress=92, message="发布包名专属依赖")

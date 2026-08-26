@@ -147,5 +147,49 @@ class ComposeStabilityValidationTest(unittest.TestCase):
             )
 
 
+class KotlinObjectInstanceValidationTest(unittest.TestCase):
+    def test_accepts_preserved_instance_field_name(self) -> None:
+        comparison = {
+            "classes": [{"source": "source.Facade", "preR8": "source.Facade", "r8": "r8.Facade"}],
+        }
+        declarations = {
+            "source.Facade": ["public static final source.Facade INSTANCE"],
+            "r8.Facade": ["public static final r8.Facade INSTANCE"],
+        }
+        with patch.object(
+            SERVER,
+            "javap_declarations",
+            side_effect=lambda _jar, class_name: declarations[class_name],
+        ):
+            checked = SERVER.validate_kotlin_object_instance_fields(
+                comparison,
+                Path("pre.jar"),
+                Path("r8.jar"),
+            )
+        self.assertEqual(1, checked)
+
+    def test_rejects_obfuscated_instance_field_name(self) -> None:
+        comparison = {
+            "classes": [{"source": "source.Facade", "preR8": "source.Facade", "r8": "r8.Facade"}],
+        }
+        declarations = {
+            "source.Facade": ["public static final source.Facade INSTANCE"],
+            "r8.Facade": ["public static final r8.Facade randomized"],
+        }
+        with (
+            patch.object(
+                SERVER,
+                "javap_declarations",
+                side_effect=lambda _jar, class_name: declarations[class_name],
+            ),
+            self.assertRaisesRegex(RuntimeError, "Kotlin object INSTANCE 字段未保留原名"),
+        ):
+            SERVER.validate_kotlin_object_instance_fields(
+                comparison,
+                Path("pre.jar"),
+                Path("r8.jar"),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

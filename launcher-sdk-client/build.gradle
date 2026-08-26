@@ -137,6 +137,7 @@ def generateClientObfuscationRules = tasks.register("generateClientObfuscationRu
 }
 -keepclassmembers class ${packageName}.** {
     public static final int ${'$'}stable;
+    public static final *** INSTANCE;
 }
 """.stripIndent()
     }
