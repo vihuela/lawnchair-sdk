@@ -82,7 +82,7 @@
     .historyTable th:nth-child(1),.historyTable td:nth-child(1) { width:100px; }
     .historyTable th:nth-child(3),.historyTable td:nth-child(3) { width:170px; }
     .historyTable th:nth-child(4),.historyTable td:nth-child(4) { width:90px; }
-    .historyTable th:nth-child(5),.historyTable td:nth-child(5) { width:120px; text-align:right; }
+    .historyTable th:nth-child(5),.historyTable td:nth-child(5) { width:190px; text-align:right; }
     .historyPackage { border:0; padding:0; color:#24543d; background:transparent; cursor:pointer; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; text-align:left; }
     .historyPackage:hover { text-decoration:underline; }
     .historyRevision { display:block; margin-top:2px; color:var(--muted); font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -92,8 +92,9 @@
     .statusPill.failure { color:var(--danger); background:var(--danger-soft); }
     .statusPill.running { color:#98610f; background:#f7edd9; }
     .statusPill.running::before { animation:pulse 1.4s var(--ease) infinite; }
-    .historyAction { color:var(--accent); text-decoration:none; font-size:12px; }
-    .historyAction:hover { text-decoration:underline; }
+    .historyActions { display:flex; align-items:center; justify-content:flex-end; gap:8px; white-space:nowrap; }
+    .historyAction { display:inline-flex; align-items:center; justify-content:center; height:32px; border:1px solid var(--line-strong); border-radius:7px; padding:0 11px; color:#39413b; background:var(--surface); text-decoration:none; font-size:12px; transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease),background var(--quick) var(--ease); }
+    .historyAction:hover { border-color:#9ba39c; color:var(--accent); background:#fafbf9; }
     .historyEmpty { padding:34px 18px; color:var(--muted); text-align:center; }
     .historyFooter { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); padding:10px 12px; color:var(--muted); font-size:12px; }
     .historyPagination { display:flex; align-items:center; gap:8px; }
@@ -366,7 +367,7 @@
           <td><button class="historyPackage" type="button" data-history-package="${escapeHtml(record.packageName)}">${escapeHtml(record.packageName)}</button><span class="historyRevision">${escapeHtml(record.sourceRevision || '等待 commit')}</span></td>
           <td>${escapeHtml(formatHistoryTime(record.startedAt))}</td>
           <td>${escapeHtml(formatDuration(record.durationSeconds, record.startedAt, active))}</td>
-          <td>${primaryAction}${primaryAction ? ' &nbsp; ' : ''}<a class="historyAction" href="${escapeHtml(record.actionsUrl)}" target="_blank" rel="noopener noreferrer">Actions</a></td>
+          <td><div class="historyActions">${primaryAction}<a class="historyAction" href="${escapeHtml(record.actionsUrl)}" target="_blank" rel="noopener noreferrer">CI 日志</a></div></td>
         </tr>`;
       }).join('') : '<tr><td colspan="5" class="historyEmpty">还没有通过网页创建的构建记录</td></tr>';
       clearTimeout(historyRefreshTimer);
