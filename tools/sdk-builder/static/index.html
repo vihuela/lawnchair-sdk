@@ -132,6 +132,9 @@
     th,td { min-width:250px; padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
     th { position:sticky; top:0; color:var(--muted); background:var(--surface-soft); font-size:11px; font-weight:600; }
     td { font-size:13px; }
+    #publicAbiTable th:nth-child(1),#publicAbiTable td:nth-child(1) { min-width:90px; }
+    #publicAbiTable th:nth-child(2),#publicAbiTable td:nth-child(2),#publicAbiTable th:nth-child(3),#publicAbiTable td:nth-child(3) { min-width:140px; }
+    #publicAbiTable th:nth-child(6),#publicAbiTable td:nth-child(6) { min-width:110px; }
     tbody tr { transition:background var(--quick) var(--ease); }
     tbody tr:hover { background:#fafbf9; }
     .groupRow:hover { background:transparent; }
@@ -227,7 +230,8 @@
         <h2>构建结果</h2>
         <div class="resultHeaderActions">
           <div id="abiValidation" class="abiStatus"></div>
-          <button id="copyAiContext" class="quietButton" type="button" disabled title="复制依赖坐标、全部函数和类型映射，供 AI 直接完成业务接入">复制全部映射（AI）</button>
+          <button id="copyBusinessContext" class="quietButton" type="button" disabled title="复制依赖坐标、业务类型和常用函数映射，供 AI 完成 App 接入">复制业务接入映射（AI）</button>
+          <button id="copyFullAbiContext" class="quietButton" type="button" disabled title="复制业务接入映射和全部公开 JVM ABI，供 AI 排查 R8 与二进制兼容问题">复制全量 ABI（AI）</button>
         </div>
       </div>
       <div class="summaryGrid">
@@ -243,11 +247,13 @@
         <div class="tabs">
           <button class="tabButton active" type="button" data-tab="functions">函数对比</button>
           <button class="tabButton" type="button" data-tab="classes">类型对比</button>
+          <button class="tabButton" type="button" data-tab="publicAbi">公开 ABI</button>
         </div>
       </div>
       <div class="tableWrap">
         <table id="functionsTable"><thead><tr><th>中文说明</th><th>源函数</th><th>pre-R8 JVM 签名</th><th>R8 后签名</th></tr></thead><tbody></tbody></table>
         <table id="classesTable" hidden><thead><tr><th>源类型</th><th>pre-R8</th><th>R8 后类型</th></tr></thead><tbody></tbody></table>
+        <table id="publicAbiTable" hidden><thead><tr><th>成员类型</th><th>源名称</th><th>R8 后名称</th><th>pre-R8 声明</th><th>R8 后声明</th><th>校验</th></tr></thead><tbody></tbody></table>
       </div>
     </section>
   </main>
@@ -602,13 +608,18 @@
 
     function renderResult(result) {
       currentBuildResult = result;
-      $('copyAiContext').disabled = false;
-      $('copyAiContext').textContent = '复制全部映射（AI）';
+      const publicAbiMembers = result.comparison?.publicAbiMembers || [];
+      $('copyBusinessContext').disabled = false;
+      $('copyBusinessContext').textContent = '复制业务接入映射（AI）';
+      $('copyFullAbiContext').disabled = publicAbiMembers.length === 0;
+      $('copyFullAbiContext').textContent = publicAbiMembers.length ? '复制全量 ABI（AI）' : '无全量 ABI 数据';
+      document.querySelector('[data-tab="publicAbi"]').textContent = publicAbiMembers.length ? `公开 ABI · ${publicAbiMembers.length}` : '公开 ABI';
       $('coordinate').textContent = result.coordinate; $('dependency').textContent = result.dependencySnippet; $('abiValidation').textContent = result.abiValidation.message;
       $('dependencyList').innerHTML = (result.dependencies || []).map(item => `<div class="dependencyItem"><div class="dependencyMeta"><span class="dependencyName">${escapeHtml(item.module)}</span><span class="dependencyBadge ${item.direct ? 'direct' : ''}">${item.direct ? '直接添加' : '自动传递'}</span>${item.packageSpecific ? '<span class="dependencyBadge specific">包名专属</span>' : ''}</div><code>${escapeHtml(item.coordinate)}</code></div>`).join('');
       $('downloads').innerHTML = (result.downloads || []).map(file => `<a href="${API_BASE}${file.url}">${escapeHtml(file.name)}</a>`).join('');
       $('functionsTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.functions, 4, row => `<tr><td>${escapeHtml(row.description)}</td><td><code>${escapeHtml(row.sourceClass)}\n${escapeHtml(row.sourceFunction)}</code></td><td><code>${escapeHtml(row.preR8.join('\n'))}</code></td><td><code>${escapeHtml(row.r8.join('\n'))}</code></td></tr>`);
       $('classesTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.classes, 3, row => `<tr><td><code>${escapeHtml(row.source)}</code></td><td><code>${escapeHtml(row.preR8)}</code></td><td><code>${escapeHtml(row.r8)}</code></td></tr>`);
+      $('publicAbiTable').querySelector('tbody').innerHTML = publicAbiTableRows(publicAbiMembers);
       $('result').style.display = 'block';
       if (result.source?.display) {
         const revision = result.source.revision ? ` · ${result.source.revision}` : '';
@@ -627,10 +638,12 @@
       return groups;
     }
 
-    function aiMappingMarkdown(result) {
+    function businessMappingMarkdown(result) {
       const comparison = result.comparison || {};
       const classes = comparison.classes || [];
       const functions = comparison.functions || [];
+      const abiValidation = result.abiValidation || {};
+      const kindCounts = abiValidation.publicMemberKindCounts || {};
       const artifactId = String(result.coordinate || '').split(':')[1] || '';
       const packageName = artifactId.replace(/-launcher-sdk$/, '');
       const repositoryOwner = githubPackagesOwner || (() => {
@@ -649,17 +662,35 @@
         `- 发布版本：\`${result.latestVersion || ''}\``,
         ...(result.source?.revision ? [`- SDK 源码 revision：\`${result.source.revision}\``] : []),
         '',
+        '`settings.gradle.kts`：',
+        '',
         '```kotlin',
+        'val localProperties = java.util.Properties().apply {',
+        '    val localPropertiesFile = file("local.properties")',
+        '    if (localPropertiesFile.isFile) {',
+        '        localPropertiesFile.inputStream().use(::load)',
+        '    }',
+        '}',
+        '',
+        'dependencyResolutionManagement {',
         'repositories {',
         '    maven {',
         `        url = uri("${result.repositoryUrl || ''}")`,
         '        credentials {',
-        '            username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")',
-        '            password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")',
+        '            username = localProperties.getProperty("github.packages.username")',
+        '                ?: System.getenv("GITHUB_ACTOR")',
+        '            password = localProperties.getProperty("github.packages.token")',
+        '                ?: System.getenv("GITHUB_TOKEN")',
         '        }',
         '    }',
         '}',
+        '}',
         '',
+        '```',
+        '',
+        '`app/build.gradle.kts`：',
+        '',
+        '```kotlin',
         'dependencies {',
         `    ${result.dependencySnippet || `implementation("${result.coordinate}")`}`,
         '}',
@@ -669,15 +700,15 @@
         '',
         '### GitHub Packages 凭证',
         '',
-        '> 将以下内容配置在接入者电脑的 `~/.gradle/gradle.properties`，不要写入或提交到业务仓库。Token 需要具备 `read:packages` 权限。',
+        '> 将以下内容配置在业务工程根目录的 `local.properties`，并确保该文件保持 Git 忽略。不要提交用户名或 Token；Token 需要具备 `read:packages` 权限。',
         '',
         '```properties',
-        `gpr.user=${repositoryOwner || '<GitHub 用户名>'}`,
-        'gpr.key=<GITHUB_PACKAGES_READ_TOKEN>',
+        `github.packages.username=${repositoryOwner || '<GitHub 用户名>'}`,
+        'github.packages.token=<GITHUB_PACKAGES_READ_TOKEN>',
         '```',
         '',
-        '- `gpr.user`：GitHub Packages 用户名。',
-        '- `gpr.key`：接入者自己的 GitHub Packages 读取 Token；不要使用或泄露构建服务器的发布 Token。',
+        '- `github.packages.username`：GitHub Packages 用户名。',
+        '- `github.packages.token`：接入者自己的 GitHub Packages 读取 Token；不要使用或泄露构建服务器的发布 Token。',
         '',
         '### 最小依赖行',
         '',
@@ -691,14 +722,21 @@
         '- 业务代码必须引用下方“R8 后真实类型”和“R8 后真实 JVM 签名”。',
         '- “源语义”用于确认用途；pre-R8 只用于对照，不能作为最终接入签名。',
         '- 生成 Kotlin/Java 调用代码时，请严格保留参数顺序、返回类型、静态/实例语义以及继承/覆写关系。',
+        '- 所有调用参数（包括 Boolean）都必须按照 R8 后真实 JVM 签名显式传入；不要根据 Kotlin 源码猜测或省略默认参数。',
+        '- 不要自行调用编译器生成的 `$default` 桥接方法；只有排查底层 ABI 且全量 ABI 明确列出时才可引用。',
         '- 如果现有业务代码与映射冲突，先报告冲突，不要自行替换为未列出的稳定 SDK 内部类型。',
         '',
         '## ABI 校验',
         '',
-        `- 结果：${result.abiValidation?.passed ? '通过' : '未通过或未知'}`,
-        `- 说明：${result.abiValidation?.message || '无'}`,
-        `- 类型数：${classes.length}`,
-        `- 函数数：${functions.length}`,
+        `- 结果：${abiValidation.passed ? '通过' : '未通过或未知'}`,
+        `- 说明：${abiValidation.message || '无'}`,
+        `- 业务映射：${classes.length} 个类型，${functions.length} 个函数`,
+        ...(Number.isFinite(abiValidation.checkedPublicMemberCount) ? [
+          `- 全量公开 ABI：${abiValidation.checkedPublicClassCount || classes.length} 个类，${abiValidation.checkedPublicMemberCount} 个成员`,
+          `- 成员类型：${kindCounts.field || 0} 个字段，${kindCounts.method || 0} 个方法，${kindCounts.constructor || 0} 个构造函数`,
+          `- R8 命名：${abiValidation.randomizedPublicMemberCount || 0} 个随机化成员，${abiValidation.preservedConventionMemberCount || 0} 个约定保留成员`,
+          `- Kotlin 默认参数桥接校验：${abiValidation.checkedKotlinDefaultBridgeCount || 0} 个`,
+        ] : []),
         '',
         '## 全部类型映射',
         ''
@@ -744,6 +782,91 @@
           );
         });
       }
+      return `${lines.join('\n').trim()}\n`;
+    }
+
+    function fullAbiMappingMarkdown(result) {
+      const members = result.comparison?.publicAbiMembers || [];
+      if (!members.length) throw new Error('该构建结果不包含全量公开 ABI 数据');
+      const lines = [
+        businessMappingMarkdown(result).trim(),
+        '',
+        '## 全量公开 JVM ABI',
+        '',
+        '> 本节是业务映射的超集，用于定位构造函数、getter、字段、Kotlin 编译器生成成员以及 R8 二进制兼容问题。真实调用以每项“R8 后声明”为准。',
+        '',
+        '### 约定保留规则',
+        '',
+        '- 构造函数名称固定为 `<init>`，所属类型仍使用 R8 后真实类型。',
+        '- `copy`、`copy$default`、`$stable`、`INSTANCE` 等约定成员可能保留原名；保留原名不代表所属类未随机化。',
+        '- 普通公开成员应按包名专属 mapping 随机化，不能复用其他业务包生成产物中的名称。',
+        '- `R8 后声明`和 JVM descriptor 必须一起核对，不能只按方法名判断重载。',
+        ''
+      ];
+
+      lines.push('### 公开类声明', '');
+      (result.comparison?.classes || []).forEach((row, index) => {
+        lines.push(
+          `#### ${index + 1}. ${row.source} → ${row.r8}`,
+          '',
+          `- 校验：${row.violation || '通过'}`,
+          '',
+          'pre-R8 类声明（仅对照）：',
+          '```text',
+          row.preDeclaration || row.preR8 || '',
+          '```',
+          '',
+          'R8 后类声明（真实 ABI）：',
+          '```text',
+          row.r8Declaration || row.expectedR8Declaration || row.r8 || '',
+          '```',
+          ''
+        );
+      });
+
+      lines.push('### 公开成员声明', '');
+      const classes = new Map();
+      members.forEach(member => {
+        if (!classes.has(member.sourceClass)) classes.set(member.sourceClass, []);
+        classes.get(member.sourceClass).push(member);
+      });
+      for (const [sourceClass, rows] of classes) {
+        lines.push(`#### ${sourceClass} → ${rows[0]?.r8Class || sourceClass}`, '');
+        rows.forEach((row, index) => {
+          const naming = row.kind === 'constructor'
+            ? '构造函数约定保留'
+            : row.sourceName === row.r8Name
+            ? '约定保留原名'
+            : 'R8 随机化';
+          lines.push(
+            `##### ${index + 1}. ${abiKindLabel(row.kind)} · ${row.sourceName} → ${row.r8Name}`,
+            '',
+            `- 命名方式：${naming}`,
+            `- pre-R8 descriptor：\`${row.preDescriptor || ''}\``,
+            `- R8 descriptor：\`${row.r8Descriptor || row.expectedR8Descriptor || ''}\``,
+            `- 校验：${row.violation || '通过'}`,
+            '',
+            'pre-R8 声明（仅对照）：',
+            '```text',
+            row.preDeclaration || '',
+            '```',
+            '',
+            'R8 后声明（真实 ABI）：',
+            '```text',
+            row.r8Declaration || row.expectedR8Declaration || '',
+            '```',
+            ''
+          );
+        });
+      }
+      const untracked = result.comparison?.untrackedPublicClasses || [];
+      lines.push(
+        '## 全量覆盖结论',
+        '',
+        `- 未登记公开类：${untracked.length ? untracked.join('、') : '无'}`,
+        `- 公开 ABI 成员总数：${members.length}`,
+        ''
+      );
       return `${lines.join('\n').trim()}\n`;
     }
 
@@ -798,29 +921,62 @@
       return Array.from(groups, ([group, entries]) => `<tr class="groupRow"><td colspan="${columnCount}">${escapeHtml(group)}</td></tr>${entries.map(renderRow).join('')}`).join('');
     }
 
+    function abiKindLabel(kind) {
+      return ({field:'字段', method:'方法', constructor:'构造函数'})[kind] || kind || '成员';
+    }
+
+    function publicAbiTableRows(rows) {
+      if (!rows.length) return '<tr><td colspan="6" class="historyEmpty">该历史构建没有全量公开 ABI 数据，请使用新版本重新构建。</td></tr>';
+      const classes = new Map();
+      rows.forEach(row => {
+        if (!classes.has(row.sourceClass)) classes.set(row.sourceClass, []);
+        classes.get(row.sourceClass).push(row);
+      });
+      return Array.from(classes, ([sourceClass, members]) => {
+        const r8Class = members[0]?.r8Class || sourceClass;
+        const heading = `<tr class="groupRow"><td colspan="6"><code>${escapeHtml(sourceClass)} → ${escapeHtml(r8Class)}</code></td></tr>`;
+        return heading + members.map(row => `<tr><td>${escapeHtml(abiKindLabel(row.kind))}</td><td><code>${escapeHtml(row.sourceName)}</code></td><td><code>${escapeHtml(row.r8Name)}</code></td><td><code>${escapeHtml(row.preDeclaration)}</code></td><td><code>${escapeHtml(row.r8Declaration || row.expectedR8Declaration || '')}</code></td><td class="${row.violation ? 'error' : ''}">${escapeHtml(row.violation || '通过')}</td></tr>`).join('');
+      }).join('');
+    }
+
     document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
       document.querySelectorAll('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
-      $('functionsTable').hidden = button.dataset.tab !== 'functions'; $('classesTable').hidden = button.dataset.tab !== 'classes';
+      $('functionsTable').hidden = button.dataset.tab !== 'functions';
+      $('classesTable').hidden = button.dataset.tab !== 'classes';
+      $('publicAbiTable').hidden = button.dataset.tab !== 'publicAbi';
     }));
     $('refreshHistory').addEventListener('click', () => loadHistory(historyPage));
-    $('copyAiContext').addEventListener('click', async () => {
+    async function copyResultContext(button, createText, successText, defaultText) {
       if (!currentBuildResult) return;
-      const button = $('copyAiContext');
       button.disabled = true;
       button.textContent = '复制中';
       try {
-        await copyText(aiMappingMarkdown(currentBuildResult));
-        const functionCount = currentBuildResult.comparison?.functions?.length || 0;
-        const classCount = currentBuildResult.comparison?.classes?.length || 0;
-        button.textContent = `已复制 · ${functionCount} 函数 / ${classCount} 类型`;
-      } catch (_) {
-        button.textContent = '复制失败，请重试';
+        await copyText(createText(currentBuildResult));
+        button.textContent = successText(currentBuildResult);
+      } catch (error) {
+        button.textContent = error.message || '复制失败，请重试';
       } finally {
         setTimeout(() => {
           button.disabled = false;
-          button.textContent = '复制全部映射（AI）';
+          button.textContent = defaultText;
         }, 1800);
       }
+    }
+    $('copyBusinessContext').addEventListener('click', () => {
+      copyResultContext(
+        $('copyBusinessContext'),
+        businessMappingMarkdown,
+        result => `已复制 · ${result.comparison?.functions?.length || 0} 函数 / ${result.comparison?.classes?.length || 0} 类型`,
+        '复制业务接入映射（AI）'
+      );
+    });
+    $('copyFullAbiContext').addEventListener('click', () => {
+      copyResultContext(
+        $('copyFullAbiContext'),
+        fullAbiMappingMarkdown,
+        result => `已复制 · ${result.comparison?.publicAbiMembers?.length || 0} 个公开成员`,
+        '复制全量 ABI（AI）'
+      );
     });
     $('historyPrevious').addEventListener('click', () => loadHistory(Math.max(1, historyPage - 1)));
     $('historyNext').addEventListener('click', () => loadHistory(Math.min(historyTotalPages, historyPage + 1)));

@@ -605,13 +605,80 @@ def extract_classes_jar(aar: Path, target: Path) -> None:
         target.write_bytes(archive.read("classes.jar"))
 
 
-def parse_mapping(mapping_file: Path) -> tuple[dict[str, str], dict[tuple[str, str], list[dict]]]:
+JVM_PRIMITIVE_DESCRIPTORS = {
+    "boolean": "Z",
+    "byte": "B",
+    "char": "C",
+    "double": "D",
+    "float": "F",
+    "int": "I",
+    "long": "J",
+    "short": "S",
+    "void": "V",
+}
+PUBLIC_ABI_PRESERVED_MEMBER_NAMES = {
+    "$stable",
+    "INSTANCE",
+    "copy",
+    "copy$default",
+    "equals",
+    "hashCode",
+    "toString",
+    "valueOf",
+    "values",
+}
+PUBLIC_ABI_IGNORED_CLASSES = {
+    "ClientEntryRegistry",
+    "ClientLauncherSdkKt",
+}
+JVM_MEMBER_MODIFIERS = {
+    "abstract",
+    "final",
+    "native",
+    "private",
+    "protected",
+    "public",
+    "static",
+    "strictfp",
+    "synchronized",
+    "transient",
+    "volatile",
+}
+
+
+def java_type_descriptor(type_name: str) -> str:
+    value = erased_type(type_name)
+    dimensions = 0
+    while value.endswith("[]"):
+        dimensions += 1
+        value = value[:-2]
+    component = JVM_PRIMITIVE_DESCRIPTORS.get(value, f"L{value.replace('.', '/')};")
+    return "[" * dimensions + component
+
+
+def mapping_method_descriptor(return_type: str, arguments: str) -> str:
+    argument_descriptor = "".join(
+        java_type_descriptor(argument)
+        for argument in split_arguments(arguments)
+    )
+    return f"({argument_descriptor}){java_type_descriptor(return_type)}"
+
+
+def parse_mapping(
+    mapping_file: Path,
+) -> tuple[
+    dict[str, str],
+    dict[tuple[str, str], list[dict]],
+    dict[tuple[str, str], list[dict]],
+]:
     class_map: dict[str, str] = {}
     methods: dict[tuple[str, str], list[dict]] = {}
+    fields: dict[tuple[str, str], list[dict]] = {}
     current_class: str | None = None
     class_pattern = re.compile(r"^(\S+) -> (\S+):$")
     member_pattern = re.compile(r"^\s+(?:(?:\d+):(?:\d+):)?(.+?) -> (\S+)$")
     method_pattern = re.compile(r"^(.*?)\s+([^\s(]+)\((.*)\)(?::\d+:\d+)?$")
+    field_pattern = re.compile(r"^(.*?)\s+(\S+)$")
 
     for raw_line in mapping_file.read_text(encoding="utf-8").splitlines():
         class_match = class_pattern.match(raw_line)
@@ -627,13 +694,32 @@ def parse_mapping(mapping_file: Path) -> tuple[dict[str, str], dict[tuple[str, s
         original, obfuscated = member_match.groups()
         method_match = method_pattern.match(original)
         if not method_match:
+            field_match = field_pattern.match(original)
+            if not field_match:
+                continue
+            field_type, field_name = field_match.groups()
+            entry = {
+                "type": field_type,
+                "name": field_name,
+                "descriptor": java_type_descriptor(field_type),
+                "r8Name": obfuscated,
+            }
+            bucket = fields.setdefault((current_class, field_name), [])
+            if entry not in bucket:
+                bucket.append(entry)
             continue
         return_type, method_name, arguments = method_match.groups()
-        entry = {"returnType": return_type, "name": method_name, "arguments": arguments, "r8Name": obfuscated}
+        entry = {
+            "returnType": return_type,
+            "name": method_name,
+            "arguments": arguments,
+            "descriptor": mapping_method_descriptor(return_type, arguments),
+            "r8Name": obfuscated,
+        }
         bucket = methods.setdefault((current_class, method_name), [])
         if entry not in bucket:
             bucket.append(entry)
-    return class_map, methods
+    return class_map, methods, fields
 
 
 def javap_declarations(jar: Path, class_name: str) -> list[str]:
@@ -648,6 +734,120 @@ def javap_declarations(jar: Path, class_name: str) -> list[str]:
     if completed.returncode != 0:
         return []
     return [line.strip().removesuffix(";") for line in completed.stdout.splitlines()]
+
+
+def javap_public_abi(jar: Path, class_name: str) -> dict:
+    completed = subprocess.run(
+        ["javap", "-classpath", str(jar), "-protected", "-s", class_name],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {"exists": False, "header": "", "members": []}
+
+    header = ""
+    members: list[dict] = []
+    pending: dict | None = None
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if (
+            line.startswith(("public ", "protected "))
+            and line.endswith("{")
+            and re.search(r"\b(class|interface|enum)\b", line)
+        ):
+            header = line.removesuffix("{").strip()
+            continue
+        if line.startswith(("public ", "protected ")) and line.endswith(";"):
+            declaration = line.removesuffix(";")
+            if "(" in declaration:
+                display_name = declaration.split("(", 1)[0].split()[-1]
+                pending = {
+                    "kind": "method",
+                    "name": display_name,
+                    "displayName": display_name,
+                    "declaration": declaration,
+                    "constructorCandidate": display_name in {
+                        class_name,
+                        class_name.rsplit(".", 1)[-1],
+                    },
+                }
+            else:
+                display_name = declaration.split()[-1]
+                pending = {
+                    "kind": "field",
+                    "name": display_name,
+                    "displayName": display_name,
+                    "declaration": declaration,
+                }
+            continue
+        if pending is not None and line.startswith("descriptor:"):
+            pending["descriptor"] = line.removeprefix("descriptor:").strip()
+            if pending.pop("constructorCandidate", False):
+                prefix = pending["declaration"].split("(", 1)[0].split()[:-1]
+                if prefix and all(token in JVM_MEMBER_MODIFIERS for token in prefix):
+                    pending["kind"] = "constructor"
+                    pending["name"] = "<init>"
+            members.append(pending)
+            pending = None
+
+    return {"exists": bool(header), "header": header, "members": members}
+
+
+def map_class_names(text: str, class_map: dict[str, str]) -> str:
+    mapped = text
+    for source_name in sorted(class_map, key=len, reverse=True):
+        mapped = mapped.replace(source_name, class_map[source_name])
+    return mapped
+
+
+def map_jvm_descriptor(descriptor: str, class_map: dict[str, str]) -> str:
+    mapped = descriptor
+    for source_name in sorted(class_map, key=len, reverse=True):
+        source_descriptor = source_name.replace(".", "/")
+        r8_descriptor = class_map[source_name].replace(".", "/")
+        mapped = mapped.replace(f"L{source_descriptor};", f"L{r8_descriptor};")
+    return mapped
+
+
+def replace_declaration_member_name(declaration: str, display_name: str, r8_name: str) -> str:
+    method_marker = f" {display_name}("
+    if method_marker in declaration:
+        return declaration.replace(method_marker, f" {r8_name}(", 1)
+    field_marker = f" {display_name}"
+    if declaration.endswith(field_marker):
+        return declaration[: -len(field_marker)] + f" {r8_name}"
+    return declaration
+
+
+def is_business_public_member(source_class: str, member: dict) -> bool:
+    name = member["name"]
+    if name.startswith("access$") or "$launcher_sdk_client_" in name:
+        return False
+    if member["kind"] == "constructor" and source_class.endswith(".ClientMinusOneScope"):
+        return False
+    return True
+
+
+def is_ignored_generated_class(simple_name: str) -> bool:
+    return (
+        simple_name in PUBLIC_ABI_IGNORED_CLASSES
+        or simple_name.startswith("EntryAdapter")
+        or "$WhenMappings" in simple_name
+        or "$$inlined$" in simple_name
+        or re.search(r"\$\d+(?:\$|$)", simple_name) is not None
+        or any(marker in simple_name for marker in ("$execute$", "$observe", "$sdk"))
+    )
+
+
+def public_declaration_compatible(expected: str, actual: str) -> bool:
+    if expected == actual:
+        return True
+    return expected.startswith("protected ") and actual == f"public {expected.removeprefix('protected ')}"
 
 
 def javap_lines(jar: Path, class_name: str) -> list[str]:
@@ -702,10 +902,92 @@ def mapped_arguments(arguments: str, class_map: dict[str, str]) -> list[str]:
     return [class_map.get(argument, argument) for argument in split_arguments(arguments)]
 
 
+def public_abi_member_rows(
+    source_class: str,
+    r8_class: str,
+    pre_abi: dict,
+    r8_abi: dict,
+    class_map: dict[str, str],
+    method_map: dict[tuple[str, str], list[dict]],
+    field_map: dict[tuple[str, str], list[dict]],
+) -> list[dict]:
+    rows: list[dict] = []
+    r8_members = r8_abi["members"]
+    for member in pre_abi["members"]:
+        if not is_business_public_member(source_class, member):
+            continue
+
+        source_name = member["name"]
+        descriptor = member["descriptor"]
+        if member["kind"] == "field":
+            mapped_entries = field_map.get((source_class, source_name), [])
+        else:
+            mapped_entries = method_map.get((source_class, source_name), [])
+        exact_entries = [entry for entry in mapped_entries if entry["descriptor"] == descriptor]
+
+        violation = ""
+        if member["kind"] == "constructor":
+            r8_name = "<init>"
+        elif exact_entries:
+            r8_name = exact_entries[0]["r8Name"]
+            mapped_names = {entry["r8Name"] for entry in exact_entries}
+            if len(mapped_names) != 1:
+                violation = "同一公开 JVM 签名存在多个 R8 成员映射"
+        elif source_name in PUBLIC_ABI_PRESERVED_MEMBER_NAMES:
+            r8_name = source_name
+        else:
+            r8_name = source_name
+            violation = "mapping 中缺少公开成员"
+
+        expected_descriptor = map_jvm_descriptor(descriptor, class_map)
+        candidates = [
+            candidate
+            for candidate in r8_members
+            if candidate["kind"] == member["kind"]
+            and candidate["name"] == r8_name
+            and candidate["descriptor"] == expected_descriptor
+        ]
+        actual = candidates[0] if candidates else None
+        expected_declaration = map_class_names(member["declaration"], class_map)
+        if member["kind"] != "constructor":
+            expected_declaration = replace_declaration_member_name(
+                expected_declaration,
+                member["displayName"],
+                r8_name,
+            )
+        if not violation and actual is None:
+            violation = "R8 产物缺少映射后的公开成员或 JVM descriptor 不一致"
+        if not violation and not public_declaration_compatible(
+            expected_declaration,
+            actual["declaration"],
+        ):
+            violation = "R8 公开声明的可见性、修饰符或泛型签名发生变化"
+
+        rows.append(
+            {
+                "sourceClass": source_class,
+                "r8Class": r8_class,
+                "kind": member["kind"],
+                "sourceName": source_name,
+                "r8Name": r8_name,
+                "preDescriptor": descriptor,
+                "expectedR8Descriptor": expected_descriptor,
+                "r8Descriptor": actual["descriptor"] if actual else "",
+                "preDeclaration": member["declaration"],
+                "expectedR8Declaration": expected_declaration,
+                "r8Declaration": actual["declaration"] if actual else "",
+                "mappingEntryCount": len(exact_entries),
+                "violation": violation,
+            }
+        )
+    return rows
+
+
 def build_comparison(package_name: str, pre_jar: Path, r8_jar: Path, mapping_file: Path) -> dict:
     namespace = f"{package_name}.launcher.sdk"
-    class_map, method_map = parse_mapping(mapping_file)
+    class_map, method_map, field_map = parse_mapping(mapping_file)
     javap_cache: dict[tuple[str, str], list[str]] = {}
+    abi_cache: dict[tuple[str, str], dict] = {}
 
     def javap_cached(kind: str, jar: Path, class_name: str) -> list[str]:
         key = (kind, class_name)
@@ -713,17 +995,55 @@ def build_comparison(package_name: str, pre_jar: Path, r8_jar: Path, mapping_fil
             javap_cache[key] = javap_lines(jar, class_name)
         return javap_cache[key]
 
+    def abi_cached(kind: str, jar: Path, class_name: str) -> dict:
+        key = (kind, class_name)
+        if key not in abi_cache:
+            abi_cache[key] = javap_public_abi(jar, class_name)
+        return abi_cache[key]
+
     class_rows = []
+    public_member_rows: list[dict] = []
     for simple_name in PUBLIC_CLASSES:
         source_name = f"{namespace}.{simple_name}"
+        r8_name = class_map.get(source_name, source_name)
+        pre_abi = abi_cached("pre", pre_jar, source_name)
+        r8_abi = abi_cached("r8", r8_jar, r8_name)
+        expected_r8_header = map_class_names(pre_abi["header"], class_map)
+        class_violation = ""
+        if not pre_abi["exists"]:
+            class_violation = "pre-R8 产物缺少公开类"
+        elif source_name not in class_map:
+            class_violation = "mapping 中缺少公开类"
+        elif source_name == r8_name:
+            class_violation = "公开类未被 R8 随机改名"
+        elif not r8_abi["exists"]:
+            class_violation = "R8 产物缺少映射后的公开类"
+        elif r8_abi["header"] != expected_r8_header:
+            class_violation = "R8 类声明的继承关系、可见性或泛型签名发生变化"
         class_rows.append(
             {
                 "group": CLASS_GROUP_BY_NAME[simple_name],
                 "source": source_name,
                 "preR8": source_name,
-                "r8": class_map.get(source_name, source_name),
+                "r8": r8_name,
+                "preDeclaration": pre_abi["header"],
+                "expectedR8Declaration": expected_r8_header,
+                "r8Declaration": r8_abi["header"],
+                "violation": class_violation,
             }
         )
+        if pre_abi["exists"] and r8_abi["exists"]:
+            public_member_rows.extend(
+                public_abi_member_rows(
+                    source_name,
+                    r8_name,
+                    pre_abi,
+                    r8_abi,
+                    class_map,
+                    method_map,
+                    field_map,
+                )
+            )
 
     function_rows = []
     for simple_class, function_name, source_signature, description in PUBLIC_FUNCTIONS:
@@ -754,7 +1074,23 @@ def build_comparison(package_name: str, pre_jar: Path, r8_jar: Path, mapping_fil
                 "r8": sorted(set(r8_signatures)) or [f"{r8_class}.{function_name}(…)"],
             }
         )
-    return {"classes": class_rows, "functions": function_rows}
+    tracked_classes = {row["source"] for row in class_rows}
+    untracked_public_classes: list[str] = []
+    for source_name in sorted(class_map):
+        if not source_name.startswith(f"{namespace}.") or source_name in tracked_classes:
+            continue
+        simple_name = source_name.removeprefix(f"{namespace}.")
+        if is_ignored_generated_class(simple_name):
+            continue
+        if abi_cached("pre", pre_jar, source_name)["exists"]:
+            untracked_public_classes.append(source_name)
+
+    return {
+        "classes": class_rows,
+        "functions": function_rows,
+        "publicAbiMembers": public_member_rows,
+        "untrackedPublicClasses": untracked_public_classes,
+    }
 
 
 def validate_business_abi(comparison: dict) -> dict:
@@ -785,6 +1121,54 @@ def validate_business_abi(comparison: dict) -> dict:
         "checkedFunctionCount": len(comparison["functions"]),
         "forbiddenTypePrefixes": list(FORBIDDEN_BUSINESS_TYPE_PREFIXES),
         "message": "所有业务引用类均已随机改名，业务函数签名未泄露固定 Lawnchair SDK 类型。",
+    }
+
+
+def validate_public_r8_abi(comparison: dict) -> dict:
+    """Validate every tracked public/protected class and member against the R8 mapping and output."""
+    violations: list[str] = []
+    for row in comparison["classes"]:
+        if row.get("violation"):
+            violations.append(f"{row['source']}: {row['violation']}")
+
+    randomized_member_count = 0
+    preserved_convention_member_count = 0
+    member_kind_counts: dict[str, int] = {}
+    for row in comparison["publicAbiMembers"]:
+        member_kind_counts[row["kind"]] = member_kind_counts.get(row["kind"], 0) + 1
+        label = f"{row['sourceClass']}.{row['sourceName']}{row['preDescriptor']}"
+        if row.get("violation"):
+            violations.append(f"{label}: {row['violation']}")
+            continue
+        if row["kind"] == "constructor":
+            preserved_convention_member_count += 1
+        elif row["sourceName"] == row["r8Name"]:
+            if row["sourceName"] not in PUBLIC_ABI_PRESERVED_MEMBER_NAMES:
+                violations.append(f"{label}: 公开成员未被 R8 随机改名")
+            else:
+                preserved_convention_member_count += 1
+        else:
+            randomized_member_count += 1
+
+        for declaration in (row["preDeclaration"], row["r8Declaration"]):
+            leaked_prefix = next(
+                (prefix for prefix in FORBIDDEN_BUSINESS_TYPE_PREFIXES if prefix in declaration),
+                None,
+            )
+            if leaked_prefix:
+                violations.append(f"{label}: 公开 ABI 泄露固定 SDK 类型 {leaked_prefix}")
+
+    for class_name in comparison["untrackedPublicClasses"]:
+        violations.append(f"公开类未登记到 PUBLIC_CLASSES：{class_name}")
+
+    if violations:
+        raise RuntimeError("公开 R8 ABI 全量校验失败：\n" + "\n".join(violations))
+    return {
+        "checkedPublicClassCount": len(comparison["classes"]),
+        "checkedPublicMemberCount": len(comparison["publicAbiMembers"]),
+        "randomizedPublicMemberCount": randomized_member_count,
+        "preservedConventionMemberCount": preserved_convention_member_count,
+        "publicMemberKindCounts": member_kind_counts,
     }
 
 
@@ -844,6 +1228,33 @@ def validate_no_public_default_argument_bridges(comparison: dict, pre_jar: Path)
     return len(source_classes)
 
 
+def validate_kotlin_default_bridge_names(comparison: dict) -> int:
+    """Ensure every public ``foo$default`` bridge remains linked to its mapped ``foo`` name."""
+    rows_by_class_and_name: dict[tuple[str, str], list[dict]] = {}
+    for row in comparison["publicAbiMembers"]:
+        rows_by_class_and_name.setdefault((row["sourceClass"], row["sourceName"]), []).append(row)
+
+    checked_count = 0
+    violations: list[str] = []
+    for row in comparison["publicAbiMembers"]:
+        if row["kind"] != "method" or not row["sourceName"].endswith("$default"):
+            continue
+        checked_count += 1
+        base_name = row["sourceName"].removesuffix("$default")
+        base_rows = rows_by_class_and_name.get((row["sourceClass"], base_name), [])
+        mapped_base_names = {base_row["r8Name"] for base_row in base_rows}
+        expected_bridge_names = {f"{name}$default" for name in mapped_base_names}
+        if not base_rows or row["r8Name"] not in expected_bridge_names:
+            violations.append(
+                f"{row['sourceClass']}.{row['sourceName']} -> {row['r8Name']}，"
+                f"对应基础方法映射为 {', '.join(sorted(mapped_base_names)) or '缺失'}",
+            )
+
+    if violations:
+        raise RuntimeError("Kotlin 默认参数 ABI 命名校验失败：\n" + "\n".join(violations))
+    return checked_count
+
+
 def write_report_html(path: Path, package_name: str, comparison: dict) -> None:
     def grouped_rows(rows: list[dict], column_count: int, render_row) -> str:
         groups: dict[str, list[dict]] = {}
@@ -865,12 +1276,23 @@ def write_report_html(path: Path, package_name: str, comparison: dict) -> None:
         4,
         lambda row: f"<tr><td>{html.escape(row['description'])}</td><td><code>{html.escape(row['sourceFunction'])}</code></td><td><code>{html.escape(chr(10).join(row['preR8']))}</code></td><td><code>{html.escape(chr(10).join(row['r8']))}</code></td></tr>",
     )
+    public_abi_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{html.escape(row['sourceClass'])}</code></td>"
+        f"<td>{html.escape(row['kind'])}</td>"
+        f"<td><code>{html.escape(row['preDeclaration'])}</code></td>"
+        f"<td><code>{html.escape(row['r8Declaration'])}</code></td>"
+        f"<td>{html.escape(row['violation'] or '通过')}</td>"
+        "</tr>"
+        for row in comparison.get("publicAbiMembers", [])
+    )
     path.write_text(
         f"""<!doctype html><meta charset=\"utf-8\"><title>{html.escape(package_name)} API mapping</title>
 <style>body{{font:14px system-ui;margin:32px;color:#17211d}}table{{border-collapse:collapse;width:100%;margin:16px 0 36px}}th,td{{border:1px solid #d9e2dc;padding:10px;text-align:left;vertical-align:top}}th{{background:#eef2ef}}.group th{{background:#dfe9e3;color:#315743;font-size:13px}}code{{white-space:pre-wrap;word-break:break-all}}</style>
 <h1>{html.escape(package_name)} Launcher SDK API mapping</h1>
 <h2>类映射</h2><table><thead><tr><th>源类</th><th>pre-R8</th><th>R8</th></tr></thead><tbody>{class_rows}</tbody></table>
-<h2>函数映射</h2><table><thead><tr><th>中文说明</th><th>Kotlin 源签名</th><th>pre-R8 JVM</th><th>R8 JVM</th></tr></thead><tbody>{function_rows}</tbody></table>""",
+<h2>函数映射</h2><table><thead><tr><th>中文说明</th><th>Kotlin 源签名</th><th>pre-R8 JVM</th><th>R8 JVM</th></tr></thead><tbody>{function_rows}</tbody></table>
+<h2>全量公开 JVM ABI</h2><table><thead><tr><th>源类</th><th>类型</th><th>pre-R8 声明</th><th>R8 声明</th><th>校验</th></tr></thead><tbody>{public_abi_rows}</tbody></table>""",
         encoding="utf-8",
     )
 
@@ -1173,19 +1595,26 @@ def build_job(job: Job) -> None:
             extract_classes_jar(r8_aar, r8_jar)
             comparison = build_comparison(job.package_name, pre_jar, r8_jar, mapping)
             abi_validation = validate_business_abi(comparison)
+            public_abi_validation = validate_public_r8_abi(comparison)
             stable_field_count = validate_compose_stability_fields(comparison, pre_jar, r8_jar)
             instance_field_count = validate_kotlin_object_instance_fields(comparison, pre_jar, r8_jar)
             no_default_bridge_class_count = validate_no_public_default_argument_bridges(
                 comparison,
                 pre_jar,
             )
+            default_bridge_count = validate_kotlin_default_bridge_names(comparison)
+            abi_validation.update(public_abi_validation)
             abi_validation["preservedComposeStableFieldCount"] = stable_field_count
             abi_validation["preservedKotlinObjectInstanceFieldCount"] = instance_field_count
             abi_validation["checkedNoDefaultBridgeClassCount"] = no_default_bridge_class_count
+            abi_validation["checkedKotlinDefaultBridgeCount"] = default_bridge_count
             abi_validation["message"] += (
-                f" 已保留 {stable_field_count} 个 Compose $stable 字段原名，"
+                f" 已全量核对 {public_abi_validation['checkedPublicClassCount']} 个公开类和"
+                f" {public_abi_validation['checkedPublicMemberCount']} 个公开成员；"
+                f"已保留 {stable_field_count} 个 Compose $stable 字段原名，"
                 f"以及 {instance_field_count} 个 Kotlin object INSTANCE 字段原名；"
-                f"{no_default_bridge_class_count} 个公开 API 类型不含 Kotlin $default 桥接。"
+                f"{no_default_bridge_class_count} 个函数 API 类型不含 Kotlin $default 桥接，"
+                f"{default_bridge_count} 个数据类型 $default 桥接保持命名关联。"
             )
             update_job(job, progress=80, message="确认并发布 SDK 基线模块")
             ensure_sdk_baseline_published(job, workspace)
