@@ -129,10 +129,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-name", required=True)
     parser.add_argument("--job-id", required=True)
+    parser.add_argument("--initialize-only", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
 
     server = load_server_module()
+    if args.initialize_only:
+        write_failure_payload(
+            server,
+            args.package_name,
+            args.job_id,
+            RuntimeError("GitHub Actions 环境准备未完成，请查看 CI 步骤状态"),
+        )
+        return 0
     try:
         validate_environment(server, args.package_name, args.job_id)
         if args.preflight_only:

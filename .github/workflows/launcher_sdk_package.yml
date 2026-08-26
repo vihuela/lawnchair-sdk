@@ -48,11 +48,19 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Initialize web result
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          BUILDER_JOB_ID: ${{ inputs.job_id }}
+        run: python3 tools/sdk-builder/ci_build.py --package-name "$PACKAGE_NAME" --job-id "$BUILDER_JOB_ID" --initialize-only
+
       - name: Install required Android SDK
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36.1" "build-tools;36.1.0"
+          SDK_MANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDK_MANAGER"
+          yes | "$SDK_MANAGER" --licenses >/dev/null || true
+          "$SDK_MANAGER" "platforms;android-36.1" "build-tools;36.1.0"
 
       - name: Validate build environment
         env:
