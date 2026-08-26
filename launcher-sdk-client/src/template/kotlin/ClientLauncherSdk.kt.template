@@ -60,27 +60,27 @@ object ClientLauncherSdk {
     suspend fun launchDesktop(): ClientCommandResult = execute(LauncherCommand.LaunchDesktop)
 
     @JvmStatic
-    suspend fun openMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+    suspend fun openMinusOne(animated: Boolean): ClientCommandResult = execute(
         LauncherCommand.OpenMinusOne(animated.toMinusOneAnimation()),
     )
 
     @JvmStatic
-    suspend fun closeMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+    suspend fun closeMinusOne(animated: Boolean): ClientCommandResult = execute(
         LauncherCommand.CloseMinusOne(animated.toMinusOneAnimation()),
     )
 
     @JvmStatic
-    suspend fun toggleMinusOne(animated: Boolean = true): ClientCommandResult = execute(
+    suspend fun toggleMinusOne(animated: Boolean): ClientCommandResult = execute(
         LauncherCommand.ToggleMinusOne(animated.toMinusOneAnimation()),
     )
 
     @JvmStatic
-    suspend fun revealDesktopItem(itemId: String, animated: Boolean = true): ClientCommandResult = execute(
+    suspend fun revealDesktopItem(itemId: String, animated: Boolean): ClientCommandResult = execute(
         LauncherCommand.RevealDesktopItem(itemId, animated.toDesktopRevealAnimation()),
     )
 
     @JvmStatic
-    suspend fun openDesktopItem(itemId: String, animated: Boolean = false): ClientCommandResult = execute(
+    suspend fun openDesktopItem(itemId: String, animated: Boolean): ClientCommandResult = execute(
         LauncherCommand.OpenDesktopItem(itemId, animated.toDesktopRevealAnimation()),
     )
 
@@ -88,7 +88,7 @@ object ClientLauncherSdk {
     suspend fun refreshDesktopItems(): ClientCommandResult = execute(LauncherCommand.RefreshDesktopItems)
 
     @JvmStatic
-    suspend fun removeDesktopItem(itemId: String, rememberRemoval: Boolean = true): ClientCommandResult = execute(
+    suspend fun removeDesktopItem(itemId: String, rememberRemoval: Boolean): ClientCommandResult = execute(
         LauncherCommand.RemoveDesktopItem(itemId, rememberRemoval),
     )
 
@@ -188,7 +188,7 @@ class ClientMinusOneScope internal constructor(private val delegate: MinusOneSco
     val progress: Float
         get() = delegate.state.progress
 
-    fun close(animated: Boolean = true): ClientCommandResult {
+    fun close(animated: Boolean): ClientCommandResult {
         return delegate.close(animated.toMinusOneAnimation()).toClientResult()
     }
 }

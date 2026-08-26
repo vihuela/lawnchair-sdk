@@ -191,5 +191,38 @@ class KotlinObjectInstanceValidationTest(unittest.TestCase):
             )
 
 
+class PublicDefaultArgumentBridgeValidationTest(unittest.TestCase):
+    def test_accepts_public_api_without_default_bridges(self) -> None:
+        comparison = {
+            "functions": [{"sourceClass": "source.Facade"}],
+        }
+        with patch.object(
+            SERVER,
+            "javap_declarations",
+            return_value=["public static final java.lang.Object command(boolean, kotlin.coroutines.Continuation)"],
+        ):
+            checked = SERVER.validate_no_public_default_argument_bridges(
+                comparison,
+                Path("pre.jar"),
+            )
+        self.assertEqual(1, checked)
+
+    def test_rejects_public_default_bridge(self) -> None:
+        comparison = {
+            "functions": [{"sourceClass": "source.Facade"}],
+        }
+        declarations = [
+            "public static java.lang.Object command$default(boolean, kotlin.coroutines.Continuation, int, java.lang.Object)",
+        ]
+        with (
+            patch.object(SERVER, "javap_declarations", return_value=declarations),
+            self.assertRaisesRegex(RuntimeError, "Kotlin 默认参数桥接"),
+        ):
+            SERVER.validate_no_public_default_argument_bridges(
+                comparison,
+                Path("pre.jar"),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

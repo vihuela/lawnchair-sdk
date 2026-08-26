@@ -367,7 +367,7 @@ PUBLIC_FUNCTIONS = [
     ("ClientLauncherSdk", "isDefaultLauncher", "fun isDefaultLauncher(context: Context): Boolean", "判断当前应用是否已被系统设置为默认桌面。"),
     ("ClientLauncherSdk", "requestDefaultLauncher", "suspend fun requestDefaultLauncher(): ClientCommandResult", "拉起系统默认桌面选择或默认 Launcher 设置流程。"),
     ("ClientLauncherSdk", "launchDesktop", "suspend fun launchDesktop(): ClientCommandResult", "打开 Launcher 主桌面。"),
-    ("ClientLauncherSdk", "openMinusOne", "suspend fun openMinusOne(animated: Boolean = true): ClientCommandResult", "展开负一屏，可选择是否播放展开动画。"),
+    ("ClientLauncherSdk", "openMinusOne", "suspend fun openMinusOne(animated: Boolean): ClientCommandResult", "展开负一屏，并显式指定是否播放展开动画。"),
     ("ClientLauncherSdk", "setApplicationLanguage", "suspend fun setApplicationLanguage(languageTag: String?): ClientCommandResult", "同步修改宿主应用和 Launcher 的语言；传 null 表示跟随系统。"),
     ("ClientLauncherEntry", "minusOneLaunchPolicy", "protected fun minusOneLaunchPolicy(): ClientMinusOneLaunchPolicy", "业务覆写：配置 Launcher 启动后展示桌面还是冷启动自动展开负一屏。"),
     ("ClientLauncherEntry", "renderMinusOne", "@Composable protected fun renderMinusOne(scope: ClientMinusOneScope, modifier: Modifier)", "业务必须覆写：提供负一屏的 Compose 页面内容。"),
@@ -380,13 +380,13 @@ PUBLIC_FUNCTIONS = [
     ("ClientLauncherSdk", "currentState", "fun currentState(): ClientLauncherStateSnapshot", "读取 Launcher 当前状态快照，包括运行时、语言和负一屏状态。"),
     ("ClientLauncherSdk", "observeState", "fun observeState(): Flow<ClientLauncherStateSnapshot>", "持续监听 Launcher 状态变化。"),
     ("ClientLauncherSdk", "observeEvents", "fun observeEvents(): Flow<ClientLauncherEvent>", "监听桌面可见、桌面图标点击等 Launcher 事件。"),
-    ("ClientLauncherSdk", "closeMinusOne", "suspend fun closeMinusOne(animated: Boolean = true): ClientCommandResult", "收起负一屏并回到桌面。"),
-    ("ClientLauncherSdk", "toggleMinusOne", "suspend fun toggleMinusOne(animated: Boolean = true): ClientCommandResult", "根据当前状态切换负一屏的展开或收起。"),
-    ("ClientMinusOneScope", "close", "fun close(animated: Boolean = true): ClientCommandResult", "在负一屏内容内部主动收起负一屏。"),
+    ("ClientLauncherSdk", "closeMinusOne", "suspend fun closeMinusOne(animated: Boolean): ClientCommandResult", "收起负一屏并回到桌面，并显式指定是否播放动画。"),
+    ("ClientLauncherSdk", "toggleMinusOne", "suspend fun toggleMinusOne(animated: Boolean): ClientCommandResult", "根据当前状态切换负一屏的展开或收起，并显式指定是否播放动画。"),
+    ("ClientMinusOneScope", "close", "fun close(animated: Boolean): ClientCommandResult", "在负一屏内容内部主动收起负一屏，并显式指定是否播放动画。"),
     ("ClientLauncherSdk", "refreshDesktopItems", "suspend fun refreshDesktopItems(): ClientCommandResult", "重新读取业务提供的桌面 Item 快照并同步到 Launcher。"),
-    ("ClientLauncherSdk", "revealDesktopItem", "suspend fun revealDesktopItem(itemId: String, animated: Boolean = true): ClientCommandResult", "打开桌面并定位到指定 SDK 桌面 Item，但不触发点击。"),
-    ("ClientLauncherSdk", "openDesktopItem", "suspend fun openDesktopItem(itemId: String, animated: Boolean = false): ClientCommandResult", "定位指定 SDK 桌面 Item，并执行该 Item 配置的点击行为。"),
-    ("ClientLauncherSdk", "removeDesktopItem", "suspend fun removeDesktopItem(itemId: String, rememberRemoval: Boolean = true): ClientCommandResult", "从桌面移除指定 SDK Item，可记录用户移除状态。"),
+    ("ClientLauncherSdk", "revealDesktopItem", "suspend fun revealDesktopItem(itemId: String, animated: Boolean): ClientCommandResult", "打开桌面并定位到指定 SDK 桌面 Item，但不触发点击；需显式指定动画。"),
+    ("ClientLauncherSdk", "openDesktopItem", "suspend fun openDesktopItem(itemId: String, animated: Boolean): ClientCommandResult", "定位指定 SDK 桌面 Item，并执行该 Item 配置的点击行为；需显式指定动画。"),
+    ("ClientLauncherSdk", "removeDesktopItem", "suspend fun removeDesktopItem(itemId: String, rememberRemoval: Boolean): ClientCommandResult", "从桌面移除指定 SDK Item，并显式指定是否记录用户移除状态。"),
     ("ClientLauncherSdk", "restoreDesktopItem", "suspend fun restoreDesktopItem(itemId: String): ClientCommandResult", "恢复之前被移除的 SDK 桌面 Item。"),
     ("ClientLauncherSdk", "openHomeSettings", "suspend fun openHomeSettings(): ClientCommandResult", "打开系统桌面应用/默认桌面的相关设置页面。"),
     ("ClientLauncherSdk", "openLauncherAppInfo", "suspend fun openLauncherAppInfo(): ClientCommandResult", "打开当前 Launcher 应用的系统详情页面。"),
@@ -824,6 +824,26 @@ def validate_kotlin_object_instance_fields(comparison: dict, pre_jar: Path, r8_j
     return checked_count
 
 
+def validate_no_public_default_argument_bridges(comparison: dict, pre_jar: Path) -> int:
+    """Reject Kotlin default-argument bridges that cannot form a safe post-R8 library ABI."""
+    source_classes = sorted({row["sourceClass"] for row in comparison["functions"]})
+    violations: list[str] = []
+    for class_name in source_classes:
+        default_bridges = [
+            line
+            for line in javap_declarations(pre_jar, class_name)
+            if "$default(" in line
+        ]
+        if default_bridges:
+            violations.extend(f"{class_name}: {line}" for line in default_bridges)
+
+    if violations:
+        raise RuntimeError(
+            "包专属公开 API 包含不安全的 Kotlin 默认参数桥接：\n" + "\n".join(violations),
+        )
+    return len(source_classes)
+
+
 def write_report_html(path: Path, package_name: str, comparison: dict) -> None:
     def grouped_rows(rows: list[dict], column_count: int, render_row) -> str:
         groups: dict[str, list[dict]] = {}
@@ -1155,11 +1175,17 @@ def build_job(job: Job) -> None:
             abi_validation = validate_business_abi(comparison)
             stable_field_count = validate_compose_stability_fields(comparison, pre_jar, r8_jar)
             instance_field_count = validate_kotlin_object_instance_fields(comparison, pre_jar, r8_jar)
+            no_default_bridge_class_count = validate_no_public_default_argument_bridges(
+                comparison,
+                pre_jar,
+            )
             abi_validation["preservedComposeStableFieldCount"] = stable_field_count
             abi_validation["preservedKotlinObjectInstanceFieldCount"] = instance_field_count
+            abi_validation["checkedNoDefaultBridgeClassCount"] = no_default_bridge_class_count
             abi_validation["message"] += (
                 f" 已保留 {stable_field_count} 个 Compose $stable 字段原名，"
-                f"以及 {instance_field_count} 个 Kotlin object INSTANCE 字段原名。"
+                f"以及 {instance_field_count} 个 Kotlin object INSTANCE 字段原名；"
+                f"{no_default_bridge_class_count} 个公开 API 类型不含 Kotlin $default 桥接。"
             )
             update_job(job, progress=80, message="确认并发布 SDK 基线模块")
             ensure_sdk_baseline_published(job, workspace)
