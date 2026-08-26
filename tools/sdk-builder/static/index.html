@@ -71,6 +71,7 @@
     .historySection { margin-top:30px; }
     .historyHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:10px; }
     .historyHeading { display:flex; align-items:baseline; gap:10px; }
+    .historyHeaderActions { display:flex; align-items:center; gap:8px; }
     .historyMeta { color:var(--muted); font-size:12px; }
     .quietButton { height:32px; border:1px solid var(--line-strong); border-radius:7px; padding:0 11px; color:#39413b; background:var(--surface); cursor:pointer; font-size:12px; transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease),background var(--quick) var(--ease); }
     .quietButton:hover:not(:disabled) { border-color:#9ba39c; color:var(--accent); background:#fafbf9; }
@@ -100,6 +101,7 @@
     .historyPagination { display:flex; align-items:center; gap:8px; }
     #result { display:none; margin-top:30px; animation:panel-in var(--slow) var(--ease) both; }
     .resultHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; }
+    .resultHeaderActions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
     h2 { margin:0; font-size:18px; letter-spacing:-.01em; }
     .abiStatus { display:flex; align-items:center; gap:7px; color:var(--accent); font-size:12px; }
     .abiStatus::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
@@ -151,6 +153,9 @@
       .sourceMeta span { display:none; }
       .historyHeading { display:block; }
       .historyMeta { display:block; margin-top:2px; }
+      .historyHeader { align-items:flex-start; }
+      .historyHeaderActions { flex-shrink:0; }
+      .resultHeader { align-items:flex-start; }
     }
     @media (prefers-reduced-motion:reduce) {
       *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
@@ -196,7 +201,9 @@
     <section class="historySection" aria-labelledby="historyTitle">
       <div class="historyHeader">
         <div class="historyHeading"><h2 id="historyTitle">构建记录</h2><span id="historyMeta" class="historyMeta">读取中</span></div>
-        <button id="refreshHistory" class="quietButton" type="button">刷新</button>
+        <div class="historyHeaderActions">
+          <button id="refreshHistory" class="quietButton" type="button">刷新</button>
+        </div>
       </div>
       <div class="panel historyPanel">
         <div class="historyTableWrap">
@@ -216,7 +223,13 @@
       </div>
     </section>
     <section id="result">
-      <div class="resultHeader"><h2>构建结果</h2><div id="abiValidation" class="abiStatus"></div></div>
+      <div class="resultHeader">
+        <h2>构建结果</h2>
+        <div class="resultHeaderActions">
+          <div id="abiValidation" class="abiStatus"></div>
+          <button id="copyAiContext" class="quietButton" type="button" disabled title="复制依赖坐标、全部函数和类型映射，供 AI 直接完成业务接入">复制全部映射（AI）</button>
+        </div>
+      </div>
       <div class="summaryGrid">
         <div class="summaryItem"><span class="summaryLabel">GitHub Packages coordinate</span><code id="coordinate"></code></div>
         <div class="summaryItem"><span class="summaryLabel">Gradle dependency</span><code id="dependency"></code></div>
@@ -254,9 +267,11 @@
     let packageTouched = false;
     let publishTargetAvailable = false;
     let serverCredentialsConfigured = false;
+    let githubPackagesOwner = '';
     let historyPage = 1;
     let historyTotalPages = 1;
     let historyRefreshTimer;
+    let currentBuildResult = null;
 
     function storageGet(key, fallback = '') {
       try { return localStorage.getItem(key) ?? fallback; }
@@ -435,6 +450,7 @@
           : '输入业务 Android 包名，使用当前本地源码生成 R8 AAR，通过校验后发布到 GitHub Packages。';
         publishTargetAvailable = Boolean(config.githubPackages?.url);
         serverCredentialsConfigured = Boolean(config.githubPackages?.configured);
+        githubPackagesOwner = config.githubPackages?.owner || '';
         refreshHistorySelects();
         $('publishTarget').textContent = `${config.githubPackages.owner}/${config.githubPackages.repository} · GitHub Packages`;
         $('publishTarget').className = `publishTarget ${serverCredentialsConfigured ? 'ready' : 'missing'}`;
@@ -585,9 +601,12 @@
     }
 
     function renderResult(result) {
+      currentBuildResult = result;
+      $('copyAiContext').disabled = false;
+      $('copyAiContext').textContent = '复制全部映射（AI）';
       $('coordinate').textContent = result.coordinate; $('dependency').textContent = result.dependencySnippet; $('abiValidation').textContent = result.abiValidation.message;
-      $('dependencyList').innerHTML = result.dependencies.map(item => `<div class="dependencyItem"><div class="dependencyMeta"><span class="dependencyName">${escapeHtml(item.module)}</span><span class="dependencyBadge ${item.direct ? 'direct' : ''}">${item.direct ? '直接添加' : '自动传递'}</span>${item.packageSpecific ? '<span class="dependencyBadge specific">包名专属</span>' : ''}</div><code>${escapeHtml(item.coordinate)}</code></div>`).join('');
-      $('downloads').innerHTML = result.downloads.map(file => `<a href="${API_BASE}${file.url}">${escapeHtml(file.name)}</a>`).join('');
+      $('dependencyList').innerHTML = (result.dependencies || []).map(item => `<div class="dependencyItem"><div class="dependencyMeta"><span class="dependencyName">${escapeHtml(item.module)}</span><span class="dependencyBadge ${item.direct ? 'direct' : ''}">${item.direct ? '直接添加' : '自动传递'}</span>${item.packageSpecific ? '<span class="dependencyBadge specific">包名专属</span>' : ''}</div><code>${escapeHtml(item.coordinate)}</code></div>`).join('');
+      $('downloads').innerHTML = (result.downloads || []).map(file => `<a href="${API_BASE}${file.url}">${escapeHtml(file.name)}</a>`).join('');
       $('functionsTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.functions, 4, row => `<tr><td>${escapeHtml(row.description)}</td><td><code>${escapeHtml(row.sourceClass)}\n${escapeHtml(row.sourceFunction)}</code></td><td><code>${escapeHtml(row.preR8.join('\n'))}</code></td><td><code>${escapeHtml(row.r8.join('\n'))}</code></td></tr>`);
       $('classesTable').querySelector('tbody').innerHTML = groupedTableRows(result.comparison.classes, 3, row => `<tr><td><code>${escapeHtml(row.source)}</code></td><td><code>${escapeHtml(row.preR8)}</code></td><td><code>${escapeHtml(row.r8)}</code></td></tr>`);
       $('result').style.display = 'block';
@@ -596,6 +615,159 @@
         $('sourceRepository').textContent = `${result.source.display}${revision}`;
       }
       setVersionStatus(`最新 ${result.latestVersion}`, 'found');
+    }
+
+    function groupRows(rows) {
+      const groups = new Map();
+      (rows || []).forEach(row => {
+        const group = row.group || '其他';
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(row);
+      });
+      return groups;
+    }
+
+    function aiMappingMarkdown(result) {
+      const comparison = result.comparison || {};
+      const classes = comparison.classes || [];
+      const functions = comparison.functions || [];
+      const artifactId = String(result.coordinate || '').split(':')[1] || '';
+      const packageName = artifactId.replace(/-launcher-sdk$/, '');
+      const repositoryOwner = githubPackagesOwner || (() => {
+        try { return new URL(result.repositoryUrl).pathname.split('/').filter(Boolean)[0] || ''; }
+        catch (_) { return ''; }
+      })();
+      const lines = [
+        '# Launcher SDK AI 接入上下文',
+        '',
+        '> 请根据以下包专属依赖和 R8 映射完成 Android/Kotlin 业务接入。真实可调用符号以“R8 后”内容为准；源语义和 pre-R8 仅用于理解功能，不应写入业务产物。',
+        '',
+        '## 依赖',
+        '',
+        ...(packageName ? [`- 业务 Android 包名：\`${packageName}\``] : []),
+        `- GitHub Packages 坐标：\`${result.coordinate || ''}\``,
+        `- 发布版本：\`${result.latestVersion || ''}\``,
+        ...(result.source?.revision ? [`- SDK 源码 revision：\`${result.source.revision}\``] : []),
+        '',
+        '```kotlin',
+        'repositories {',
+        '    maven {',
+        `        url = uri("${result.repositoryUrl || ''}")`,
+        '        credentials {',
+        '            username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")',
+        '            password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")',
+        '        }',
+        '    }',
+        '}',
+        '',
+        'dependencies {',
+        `    ${result.dependencySnippet || `implementation("${result.coordinate}")`}`,
+        '}',
+        '```',
+        '',
+        '只添加上面一条业务依赖；Launcher 内部模块由其 POM 自动传递，不要分别声明。',
+        '',
+        '### GitHub Packages 凭证',
+        '',
+        '> 将以下内容配置在接入者电脑的 `~/.gradle/gradle.properties`，不要写入或提交到业务仓库。Token 需要具备 `read:packages` 权限。',
+        '',
+        '```properties',
+        `gpr.user=${repositoryOwner || '<GitHub 用户名>'}`,
+        'gpr.key=<GITHUB_PACKAGES_READ_TOKEN>',
+        '```',
+        '',
+        '- `gpr.user`：GitHub Packages 用户名。',
+        '- `gpr.key`：接入者自己的 GitHub Packages 读取 Token；不要使用或泄露构建服务器的发布 Token。',
+        '',
+        '### 最小依赖行',
+        '',
+        '```kotlin',
+        result.dependencySnippet || `implementation("${result.coordinate}")`,
+        '```',
+        '',
+        '## AI 接入约束',
+        '',
+        '- 这是按 Android 包名生成的专属 ABI，不要猜测、还原或硬编码其他包名产物中的类名和函数名。',
+        '- 业务代码必须引用下方“R8 后真实类型”和“R8 后真实 JVM 签名”。',
+        '- “源语义”用于确认用途；pre-R8 只用于对照，不能作为最终接入签名。',
+        '- 生成 Kotlin/Java 调用代码时，请严格保留参数顺序、返回类型、静态/实例语义以及继承/覆写关系。',
+        '- 如果现有业务代码与映射冲突，先报告冲突，不要自行替换为未列出的稳定 SDK 内部类型。',
+        '',
+        '## ABI 校验',
+        '',
+        `- 结果：${result.abiValidation?.passed ? '通过' : '未通过或未知'}`,
+        `- 说明：${result.abiValidation?.message || '无'}`,
+        `- 类型数：${classes.length}`,
+        `- 函数数：${functions.length}`,
+        '',
+        '## 全部类型映射',
+        ''
+      ];
+
+      for (const [group, rows] of groupRows(classes)) {
+        lines.push(`### ${group}`, '');
+        rows.forEach((row, index) => {
+          lines.push(
+            `#### ${index + 1}. ${row.source}`,
+            '',
+            `- 源语义类型：\`${row.source}\``,
+            `- pre-R8 类型：\`${row.preR8}\``,
+            `- R8 后真实类型：\`${row.r8}\``,
+            ''
+          );
+        });
+      }
+
+      lines.push('## 全部函数映射', '');
+      for (const [group, rows] of groupRows(functions)) {
+        lines.push(`### ${group}`, '');
+        rows.forEach((row, index) => {
+          lines.push(
+            `#### ${index + 1}. ${row.description}`,
+            '',
+            `- 中文说明：${row.description}`,
+            `- 源语义类：\`${row.sourceClass}\``,
+            `- 源语义函数：\`${row.sourceFunction}\``,
+            `- R8 后真实类：\`${row.r8Class}\``,
+            `- R8 后真实方法名：\`${row.r8Name}\``,
+            '',
+            'pre-R8 JVM 签名（仅对照）：',
+            '```text',
+            ...(row.preR8 || []),
+            '```',
+            '',
+            'R8 后真实 JVM 签名（业务接入使用）：',
+            '```text',
+            ...(row.r8 || []),
+            '```',
+            ''
+          );
+        });
+      }
+      return `${lines.join('\n').trim()}\n`;
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (_) {
+          // 部分浏览器会暴露 Clipboard API，但在当前权限上下文中拒绝写入。
+        }
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        if (!document.execCommand('copy')) throw new Error('浏览器拒绝了剪贴板写入');
+      } finally {
+        textarea.remove();
+      }
     }
 
     function groupedTableRows(rows, columnCount, renderRow) {
@@ -612,6 +784,25 @@
       $('functionsTable').hidden = button.dataset.tab !== 'functions'; $('classesTable').hidden = button.dataset.tab !== 'classes';
     }));
     $('refreshHistory').addEventListener('click', () => loadHistory(historyPage));
+    $('copyAiContext').addEventListener('click', async () => {
+      if (!currentBuildResult) return;
+      const button = $('copyAiContext');
+      button.disabled = true;
+      button.textContent = '复制中';
+      try {
+        await copyText(aiMappingMarkdown(currentBuildResult));
+        const functionCount = currentBuildResult.comparison?.functions?.length || 0;
+        const classCount = currentBuildResult.comparison?.classes?.length || 0;
+        button.textContent = `已复制 · ${functionCount} 函数 / ${classCount} 类型`;
+      } catch (_) {
+        button.textContent = '复制失败，请重试';
+      } finally {
+        setTimeout(() => {
+          button.disabled = false;
+          button.textContent = '复制全部映射（AI）';
+        }, 1800);
+      }
+    });
     $('historyPrevious').addEventListener('click', () => loadHistory(Math.max(1, historyPage - 1)));
     $('historyNext').addEventListener('click', () => loadHistory(Math.min(historyTotalPages, historyPage + 1)));
     $('historyBody').addEventListener('click', event => {
