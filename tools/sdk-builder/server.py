@@ -136,6 +136,17 @@ def github_source_config(fallback_token: str = "") -> dict:
     else:
         encoded_ref = quote(ref, safe="")
         archive_url = f"https://api.github.com/repos/{owner}/{repository}/tarball/{encoded_ref}"
+    source_display = "当前本地工作区"
+    if mode == "local" and os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        actions_repository = os.environ.get("GITHUB_REPOSITORY", f"{owner}/{repository}").strip()
+        actions_ref = (
+            os.environ.get("GITHUB_HEAD_REF", "").strip()
+            or os.environ.get("GITHUB_REF_NAME", "").strip()
+            or ref
+        )
+        source_display = f"{actions_repository}@{actions_ref}（GitHub Actions）"
+    elif mode == "github":
+        source_display = f"{owner}/{repository}@{ref}"
     return {
         "mode": mode,
         "owner": owner,
@@ -143,7 +154,7 @@ def github_source_config(fallback_token: str = "") -> dict:
         "ref": ref,
         "archiveUrl": archive_url,
         "token": token,
-        "display": "当前本地工作区" if mode == "local" else f"{owner}/{repository}@{ref}",
+        "display": source_display,
     }
 
 
@@ -1121,7 +1132,12 @@ def build_job(job: Job) -> None:
         append_log(job, f"ERROR: {error}")
     finally:
         if workspace is not None:
-            append_log(job, "清理临时源码工作区" if workspace.temporary_root else "保留本地源码工作区")
+            if workspace.temporary_root:
+                append_log(job, "清理临时源码工作区")
+            elif os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+                append_log(job, "使用 GitHub Actions 已检出的源码工作区")
+            else:
+                append_log(job, "保留本地源码工作区")
             workspace.cleanup()
         with JOBS_LOCK:
             job.github_token = ""
