@@ -9,6 +9,14 @@
     public <init>(...);
 }
 
+# ObjectAnimator/PropertyValuesHolder resolves this property by its JavaBean method name at
+# runtime. Keep only the reflected accessors; the wrapper class itself may still receive the
+# host application's package-specific R8 name.
+-keepclassmembers class com.android.launcher3.allapps.DiscoveryBounce$VerticalProgressWrapper {
+    public void setProgress(float);
+    public float getProgress();
+}
+
 # Protobuf Lite stores generated field names (for example, "pageIndex_") in message metadata
 # and resolves them reflectively at runtime. Preserve only Launcher/Lawnchair proto fields; their
 # owning classes and the rest of the SDK remain eligible for the host app's package-specific R8.
