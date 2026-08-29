@@ -39,6 +39,22 @@ jobs:
           ref: feature/sdk-15
           submodules: recursive
 
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          echo "Disk usage before cleanup:"
+          df -h /
+
+          # This Android build does not use these large preinstalled toolchains.
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+
+          echo "Disk usage after cleanup:"
+          df -h /
+
       - name: Set up Java 21
         uses: actions/setup-java@v5
         with:
