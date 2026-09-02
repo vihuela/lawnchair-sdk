@@ -35,3 +35,21 @@ object MinusOneGeometry {
         return direction * deltaX / width
     }
 }
+
+/** Pure direction/ownership policy shared by the Android overlay gesture adapter. */
+object MinusOneHorizontalGesturePolicy {
+    /** Android's scroll direction corresponding to a physical finger drag. */
+    fun contentScrollDirection(deltaX: Float): Int = when {
+        deltaX > 0f -> -1
+        deltaX < 0f -> 1
+        else -> 0
+    }
+
+    /** Embedded content only owns horizontal gestures while the overlay is fully open. */
+    fun shouldDeferToContent(
+        overlayProgress: Float,
+        canContentScrollInDragDirection: Boolean,
+    ): Boolean = overlayProgress >= FULLY_OPEN_PROGRESS && canContentScrollInDragDirection
+
+    private const val FULLY_OPEN_PROGRESS = 0.999f
+}

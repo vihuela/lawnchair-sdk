@@ -4,16 +4,20 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.lawnchair.LawnchairLauncher
 import app.lawnchair.sdk.api.MinusOneState
 import app.lawnchair.sdk.runtime.MinusOneGeometry
+import app.lawnchair.sdk.runtime.MinusOneHorizontalGesturePolicy
 import app.lawnchair.sdk.runtime.MinusOneProgressStateMachine
 import com.android.launcher3.InsettableFrameLayout
 import com.android.launcher3.R
@@ -44,6 +48,7 @@ class LocalLauncherOverlay(
     private var touchDownY = 0f
     private var swipeStartProgress = 0f
     private var isSwiping = false
+    private var gestureTarget = HorizontalGestureTarget.Undecided
 
     private val touchSlop by lazy {
         ViewConfiguration.get(launcher).scaledTouchSlop
@@ -168,22 +173,53 @@ class LocalLauncherOverlay(
                         lastTouchX = ev.rawX
                         swipeStartProgress = currentProgress
                         isSwiping = false
+                        gestureTarget = HorizontalGestureTarget.Undecided
                         return super.dispatchTouchEvent(ev)
                     }
 
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = ev.rawX - touchDownX
                         val deltaY = ev.rawY - touchDownY
-                        if (!isSwiping &&
+                        if (gestureTarget == HorizontalGestureTarget.Undecided &&
                             kotlin.math.abs(deltaX) > touchSlop &&
                             kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY)
                         ) {
-                            isSwiping = true
-                            MotionEvent.obtain(ev).apply {
-                                action = MotionEvent.ACTION_CANCEL
-                                super.dispatchTouchEvent(this)
-                                recycle()
+                            val scrollDirection =
+                                MinusOneHorizontalGesturePolicy.contentScrollDirection(deltaX)
+                            val canContentScroll = scrollDirection != 0 &&
+                                getChildAt(0)?.canScrollHorizontallyAt(
+                                    rawX = ev.rawX.toInt(),
+                                    rawY = ev.rawY.toInt(),
+                                    direction = scrollDirection,
+                                    bounds = Rect(),
+                                ) == true
+                            val deferToContent =
+                                MinusOneHorizontalGesturePolicy.shouldDeferToContent(
+                                    overlayProgress = currentProgress,
+                                    canContentScrollInDragDirection = canContentScroll,
+                                )
+                            gestureTarget = if (deferToContent) {
+                                HorizontalGestureTarget.Content
+                            } else {
+                                HorizontalGestureTarget.Overlay
                             }
+
+                            if (deferToContent) {
+                                // Keep this entire gesture with the child. If it reaches an edge
+                                // mid-drag, Launcher may take over only on the next gesture.
+                                parent?.requestDisallowInterceptTouchEvent(true)
+                            } else {
+                                isSwiping = true
+                                MotionEvent.obtain(ev).apply {
+                                    action = MotionEvent.ACTION_CANCEL
+                                    super.dispatchTouchEvent(this)
+                                    recycle()
+                                }
+                            }
+                        }
+
+                        if (gestureTarget == HorizontalGestureTarget.Content) {
+                            return super.dispatchTouchEvent(ev)
                         }
 
                         if (isSwiping) {
@@ -216,11 +252,14 @@ class LocalLauncherOverlay(
                             }
                             animateToProgress(targetProgress)
                             isSwiping = false
+                            gestureTarget = HorizontalGestureTarget.Undecided
                             return true
                         }
 
                         isSwiping = false
-                        return super.dispatchTouchEvent(ev)
+                        val handled = super.dispatchTouchEvent(ev)
+                        gestureTarget = HorizontalGestureTarget.Undecided
+                        return handled
                     }
                 }
 
@@ -233,6 +272,29 @@ class LocalLauncherOverlay(
             translationX = closedTranslationX()
             addView(MinusOneComposeHost.create(context, content))
         }
+    }
+
+    /**
+     * Finds a horizontally scrollable view under the pointer. ComposeView is only a host; its
+     * AndroidComposeView child exposes the actual scrollability of HorizontalPager/LazyRow.
+     */
+    private fun View.canScrollHorizontallyAt(
+        rawX: Int,
+        rawY: Int,
+        direction: Int,
+        bounds: Rect,
+    ): Boolean {
+        if (!isShown || !getGlobalVisibleRect(bounds) || !bounds.contains(rawX, rawY)) return false
+
+        if (this is ViewGroup) {
+            for (index in childCount - 1 downTo 0) {
+                if (getChildAt(index).canScrollHorizontallyAt(rawX, rawY, direction, bounds)) {
+                    return true
+                }
+            }
+        }
+
+        return canScrollHorizontally(direction)
     }
 
     private fun addToLauncherRootView() {
@@ -326,5 +388,11 @@ class LocalLauncherOverlay(
     companion object {
         private const val ANIMATION_DURATION_MS = 250L
         private const val SWITCH_THRESHOLD = 0.3f
+    }
+
+    private enum class HorizontalGestureTarget {
+        Undecided,
+        Content,
+        Overlay,
     }
 }

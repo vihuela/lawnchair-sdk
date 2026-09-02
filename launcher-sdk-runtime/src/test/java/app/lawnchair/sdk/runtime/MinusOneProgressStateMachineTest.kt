@@ -61,4 +61,44 @@ class MinusOneProgressStateMachineTest {
         assertEquals(0.25f, MinusOneGeometry.dragProgressDelta(250f, 1000f, isRtl = false), 0.001f)
         assertEquals(0.25f, MinusOneGeometry.dragProgressDelta(-250f, 1000f, isRtl = true), 0.001f)
     }
+
+    @Test
+    fun contentScrollDirectionOpposesPhysicalFingerDrag() {
+        assertEquals(-1, MinusOneHorizontalGesturePolicy.contentScrollDirection(10f))
+        assertEquals(1, MinusOneHorizontalGesturePolicy.contentScrollDirection(-10f))
+        assertEquals(0, MinusOneHorizontalGesturePolicy.contentScrollDirection(0f))
+    }
+
+    @Test
+    fun fullyOpenedOverlayDefersToScrollableContent() {
+        assertEquals(
+            true,
+            MinusOneHorizontalGesturePolicy.shouldDeferToContent(
+                overlayProgress = 1f,
+                canContentScrollInDragDirection = true,
+            ),
+        )
+    }
+
+    @Test
+    fun overlayKeepsGestureWhenContentIsAtItsBoundary() {
+        assertEquals(
+            false,
+            MinusOneHorizontalGesturePolicy.shouldDeferToContent(
+                overlayProgress = 1f,
+                canContentScrollInDragDirection = false,
+            ),
+        )
+    }
+
+    @Test
+    fun partiallyOpenedOverlayKeepsGestureEvenWhenContentCanScroll() {
+        assertEquals(
+            false,
+            MinusOneHorizontalGesturePolicy.shouldDeferToContent(
+                overlayProgress = 0.8f,
+                canContentScrollInDragDirection = true,
+            ),
+        )
+    }
 }
