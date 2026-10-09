@@ -89,6 +89,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.IRemoteCallback;
@@ -289,7 +290,11 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
         mDragLayer = mLauncher.getDragLayer();
         mHandler = new Handler(Looper.getMainLooper());
         mDeviceProfile = mLauncher.getDeviceProfile();
-        mBackAnimationController = new LauncherBackAnimationController(mLauncher, this);
+        // Predictive back-to-home only exists on U+; instantiating the controller below U
+        // loads IOnBackInvokedCallback / BackEvent types that do not exist on Android 12/13.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            mBackAnimationController = new LauncherBackAnimationController(mLauncher, this);
+        }
         checkAndMonitorIfAnimationsAreEnabled();
 
         Resources res = mLauncher.getResources();

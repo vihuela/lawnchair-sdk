@@ -88,9 +88,6 @@ import android.view.Display;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.View;
-import android.window.BackEvent;
-import android.window.OnBackAnimationCallback;
-import android.window.OnBackInvokedDispatcher;
 import android.window.RemoteTransition;
 import android.window.SplashScreen;
 
@@ -897,57 +894,15 @@ public class QuickstepLauncher extends Launcher implements RecentsViewContainer 
             return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-                    new OnBackAnimationCallback() {
-    
-                        @Nullable
-                        OnBackPressedHandler mActiveOnBackPressedHandler;
-    
-                        @Override
-                        public void onBackStarted(@NonNull BackEvent backEvent) {
-                            if (mActiveOnBackPressedHandler != null) {
-                                mActiveOnBackPressedHandler.onBackCancelled();
-                            }
-                            mActiveOnBackPressedHandler = getOnBackPressedHandler();
-                            mActiveOnBackPressedHandler.onBackStarted();
-                        }
-    
-                        @Override
-                        public void onBackInvoked() {
-                            // Recreate mActiveOnBackPressedHandler if necessary to avoid NPE
-                            // because:
-                            // 1. b/260636433: In 3-button-navigation mode, onBackStarted() is not
-                            // called on ACTION_DOWN before onBackInvoked() is called in ACTION_UP.
-                            // 2. Launcher#onBackPressed() will call onBackInvoked() without calling
-                            // onBackInvoked() beforehand.
-                            if (mActiveOnBackPressedHandler == null) {
-                                mActiveOnBackPressedHandler = getOnBackPressedHandler();
-                            }
-                            mActiveOnBackPressedHandler.onBackInvoked();
-                            mActiveOnBackPressedHandler = null;
-                            TestLogging.recordEvent(TestProtocol.SEQUENCE_MAIN, "onBackInvoked");
-                        }
-                        @Override
-                        public void onBackProgressed(@NonNull BackEvent backEvent) {
-                            if (!FeatureFlags.IS_STUDIO_BUILD
-                                    && mActiveOnBackPressedHandler == null) {
-                                return;
-                            }
-                            mActiveOnBackPressedHandler.onBackProgressed(backEvent.getProgress());
-                        }
-    
-                        @Override
-                        public void onBackCancelled() {
-                            if (!FeatureFlags.IS_STUDIO_BUILD
-                                    && mActiveOnBackPressedHandler == null) {
-                                return;
-                            }
-                            mActiveOnBackPressedHandler.onBackCancelled();
-                            mActiveOnBackPressedHandler = null;
-                        }
-                    });
+            // API-34 types live in PredictiveBackCallback so this class (and the whole
+            // launcher hierarchy) stays loadable on Android 12/13.
+            PredictiveBackCallback.register(this);
         }
+    }
+
+    /** Package-private bridge so PredictiveBackCallback can reach the protected handler. */
+    OnBackPressedHandler getOnBackPressedHandlerCompat() {
+        return getOnBackPressedHandler();
     }
 
     private void onTaskbarInAppDisplayProgressUpdate(float progress, int flag) {
