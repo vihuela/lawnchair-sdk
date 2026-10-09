@@ -15,12 +15,28 @@
  */
 package com.android.launcher3.util;
 
-import android.window.OnBackAnimationCallback;
+import androidx.annotation.FloatRange;
 
 /**
- * Extension of {@link OnBackAnimationCallback} that allows a check to determine
- * if this callback supports handling back or not
+ * Back handler contract that mirrors the framework's OnBackAnimationCallback without
+ * referencing it, so classes in the launcher hierarchy stay loadable below API 34
+ * (android.window.OnBackAnimationCallback only exists on U+; extending it here made every
+ * implementing/referencing class fail verification with NoClassDefFoundError on Android 12/13).
  */
-public interface BackPressHandler extends OnBackAnimationCallback {
+public interface BackPressHandler {
+
+    /** Whether this handler currently supports handling back. */
     boolean canHandleBack();
+
+    /** Called when a back gesture has started. */
+    default void onBackStarted() {}
+
+    /** Called when back is committed. */
+    void onBackInvoked();
+
+    /** Called with the back gesture's progress. */
+    default void onBackProgressed(@FloatRange(from = 0.0, to = 1.0) float backProgress) {}
+
+    /** Called when the back gesture is cancelled. */
+    default void onBackCancelled() {}
 }

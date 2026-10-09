@@ -150,7 +150,6 @@ import android.view.WindowManager.LayoutParams;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.animation.OvershootInterpolator;
 import android.widget.Toast;
-import android.window.OnBackAnimationCallback;
 
 import androidx.annotation.CallSuper;
 import androidx.annotation.FloatRange;
@@ -599,7 +598,7 @@ public class Launcher extends StatefulActivity<LauncherState>
     }
 
     /**
-     * Provide {@link OnBackAnimationCallback} in below order:
+     * Provide the back handler in below order (mirrors the framework OnBackAnimationCallback):
      * <ol>
      * <li>auto cancel action mode handler
      * <li>drag handler
