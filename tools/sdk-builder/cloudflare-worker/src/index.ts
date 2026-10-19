@@ -1,5 +1,3 @@
-import { Unzip, UnzipPassThrough } from "fflate";
-
 interface Env {
   ASSETS: Fetcher;
   GITHUB_USERNAME: string;
@@ -150,12 +148,6 @@ async function downloadArtifact(env: Env, artifact: Artifact): Promise<ArrayBuff
   return response.arrayBuffer();
 }
 
-// Let fflate parse ZIP records, but use the runtime's native inflater instead
-// of spending the free-tier CPU budget on a JavaScript DEFLATE implementation.
-class RawDeflate extends UnzipPassThrough {
-  static compression = 8;
-}
-
 // A complete GitHub ZIP has a central directory even when its local headers
 // use data descriptors. Read that directory instead of scanning compressed data.
 function reportEntry(data: Uint8Array): { bytes: Uint8Array<ArrayBuffer>; compression: number; size: number; crc: number } | undefined {
@@ -192,44 +184,6 @@ function reportEntry(data: Uint8Array): { bytes: Uint8Array<ArrayBuffer>; compre
   return undefined;
 }
 
-export async function extractArtifactJob(data: Uint8Array): Promise<string> {
-  const maxSize = 2 * 1024 * 1024;
-  const entry = reportEntry(data);
-  if (entry && entry.size > maxSize) throw new Error("CI 的 job.json 超过 2 MiB 限制");
-  const chunks: Uint8Array<ArrayBuffer>[] = entry ? [entry.bytes] : [];
-  let compression: number | undefined = entry?.compression;
-  let finished = Boolean(entry);
-  const archive = new Unzip(file => {
-    if (compression !== undefined || !(file.name === "job.json" || file.name.endsWith("/job.json"))) return;
-    if ((file.originalSize || 0) > maxSize) throw new Error("CI 的 job.json 超过 2 MiB 限制");
-    if (file.compression !== 0 && file.compression !== 8) throw new Error("CI 产物使用了不支持的 ZIP 压缩格式");
-    compression = file.compression;
-    file.ondata = (error, chunk, final) => {
-      if (error) throw error;
-      chunks.push(Uint8Array.from(chunk));
-      finished = final;
-    };
-    file.start();
-  });
-  archive.register(RawDeflate);
-  if (!entry) archive.push(data, true);
-  if (compression === undefined) throw new Error("CI 产物中缺少 job.json");
-  if (!finished) throw new Error("CI 的 job.json 数据不完整");
-  if (compression !== 0 && compression !== 8) throw new Error("CI 产物使用了不支持的 ZIP 压缩格式");
-  let stream = new Blob(chunks).stream();
-  if (compression === 8) stream = stream.pipeThrough(new DecompressionStream("deflate-raw"));
-  let bytes = 0;
-  // Streaming ZIPs may omit originalSize. Enforce the limit on actual output too.
-  const bounded = stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-    transform(chunk, controller) {
-      bytes += chunk.byteLength;
-      if (bytes > maxSize) throw new Error("CI 的 job.json 超过 2 MiB 限制");
-      controller.enqueue(chunk);
-    },
-  }));
-  return new Response(bounded).text();
-}
-
 // ZIP method 8 and gzip use the same DEFLATE payload. Rewrap it using the
 // archive's CRC/size trailer; the browser verifies and inflates the report.
 // This avoids inflating and parsing the full ABI tables/log on a cold Worker.
@@ -242,11 +196,6 @@ export function artifactGzip(data: Uint8Array): Blob | undefined {
   view.setUint32(0, entry.crc, true);
   view.setUint32(4, entry.size, true);
   return new Blob([new Uint8Array([31,139,8,0,0,0,0,0,0,255]), entry.bytes, trailer]);
-}
-
-async function readArtifactJob(env: Env, artifact: Artifact): Promise<Record<string, unknown>> {
-  const text = await extractArtifactJob(new Uint8Array(await downloadArtifact(env, artifact)));
-  return JSON.parse(text) as Record<string, unknown>;
 }
 
 async function runProgress(env: Env, run: WorkflowRun): Promise<{ progress: number; message: string; log: string[] }> {
@@ -362,7 +311,7 @@ async function buildResponse(request: Request, env: Env, context: ExecutionConte
   }, 202);
 }
 
-async function jobResponse(env: Env, jobId: string, context: ExecutionContext, artifactFormat = false): Promise<Response> {
+async function jobResponse(env: Env, jobId: string): Promise<Response> {
   const run = await findRun(env, jobId);
   if (!run) {
     return json({ id: jobId, state: "queued", progress: 3, message: "等待 GitHub Actions 创建任务", log: [] });
@@ -397,37 +346,23 @@ async function jobResponse(env: Env, jobId: string, context: ExecutionContext, a
     return json({ id: jobId, state: "failed", progress: 100, message: "GitHub Actions 构建失败", error: `CI 结论：${run.conclusion || "unknown"}`, log: progress.log, actionsUrl: run.html_url });
   }
 
-  if (artifactFormat) {
-    const data = new Uint8Array(await downloadArtifact(env, artifact));
-    const compressed = artifactGzip(data);
-    const headers = { ...JSON_HEADERS, "X-Launcher-Report": "artifact", "X-Actions-Url": run.html_url };
-    if (compressed) {
-      return new Response(compressed, {
-        headers: { ...headers, "Content-Encoding": "gzip" },
-        // Preserve the existing compressed bytes; no second compression pass.
-        encodeBody: "manual",
-      });
-    }
-    return new Response(await extractArtifactJob(data), { headers });
+  // All clients now use the same transport, including the old unqualified URL.
+  // Report JSON is decoded and normalized in the browser, never in this route.
+  const data = new Uint8Array(await downloadArtifact(env, artifact));
+  const compressed = artifactGzip(data);
+  const headers = { ...JSON_HEADERS, "X-Launcher-Report": "artifact", "X-Actions-Url": run.html_url };
+  if (compressed) {
+    return new Response(compressed, {
+      headers: { ...headers, "Content-Encoding": "gzip" },
+      encodeBody: "manual",
+    });
   }
-
-  // Validate artifact existence above, then stream an already formatted report
-  // on repeat lookups. Avoid parsing/stringifying the ~300 KB build log again.
-  const cache = await caches.open("launcher-packer-job-response-v3");
-  const key = new Request(`https://launcher-packer-artifact.invalid/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPOSITORY)}/${artifact.id}/${run.id}/${jobId}`);
-  const hit = await cache.match(key);
-  if (hit) return new Response(hit.body, { headers: JSON_HEADERS });
-  const job = await readArtifactJob(env, artifact);
-  if (job.state !== "completed" || !job.result) {
-    return json({ ...job, actionsUrl: run.html_url, log: Array.isArray(job.log) ? job.log : (await runProgress(env, run)).log });
+  const stored = reportEntry(data);
+  if (stored?.compression === 0) {
+    if (stored.size > 2 * 1024 * 1024 || stored.bytes.length !== stored.size) throw new Error("CI 报告大小无效");
+    return new Response(stored.bytes, { headers });
   }
-  const result = job.result as Record<string, unknown>;
-  result.downloads = [];
-  const response = json({ ...job, state: "completed", progress: 100, message: "GitHub Actions 构建并发布完成", result, actionsUrl: run.html_url });
-  const stored = new Response(response.clone().body, response);
-  stored.headers.set("Cache-Control", "max-age=600");
-  context.waitUntil(cache.put(key, stored));
-  return response;
+  throw new Error("CI 报告需要使用标准 ZIP 的 stored 或 DEFLATE 格式");
 }
 
 async function withSecurityHeaders(response: Response): Promise<Response> {
@@ -449,7 +384,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/build") return await buildResponse(request, env, context);
 
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f]{12})\/?$/);
-      if (request.method === "GET" && jobMatch) return await jobResponse(env, jobMatch[1], context, url.searchParams.get("format") === "artifact");
+      if (request.method === "GET" && jobMatch) return await jobResponse(env, jobMatch[1]);
       if (url.pathname.startsWith("/api/")) return json({ error: "接口不存在" }, 404);
 
       return withSecurityHeaders(await env.ASSETS.fetch(request));

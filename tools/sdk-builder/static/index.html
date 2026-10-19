@@ -434,7 +434,7 @@
       button.disabled = true;
       button.textContent = '读取中';
       try {
-        const response = await fetch(`${API_BASE}/api/jobs/${jobId}?format=artifact`);
+        const response = await fetch(`${API_BASE}/api/jobs/${jobId}`);
         const job = normalizeJob(await readJson(response), response);
         if (!response.ok) throw new Error(job.error || `结果读取失败（HTTP ${response.status}）`);
         if (!job.result) throw new Error(job.message || '该记录没有可查看的详细报告');
@@ -600,7 +600,7 @@
 
     async function poll(id) {
       try {
-        const response = await fetch(`${API_BASE}/api/jobs/${id}?format=artifact`);
+        const response = await fetch(`${API_BASE}/api/jobs/${id}`);
         const job = normalizeJob(await readJson(response), response);
         if (!response.ok) throw new Error(job.error || `读取任务失败（HTTP ${response.status}）`);
         $('statusText').textContent = job.publicationVersion ? `${job.message} · ${job.publicationVersion}` : job.message;

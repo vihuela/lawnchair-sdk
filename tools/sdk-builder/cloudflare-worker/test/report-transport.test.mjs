@@ -25,14 +25,14 @@ test('raw DEFLATE transport preserves every report byte and verifies gzip CRC', 
   assert.equal(gunzipSync(new Uint8Array(await compressed.arrayBuffer())).toString(), payload);
 });
 
-test('stored ZIP uses the existing extraction fallback and excessive reports are rejected', () => {
+test('stored ZIP skips gzip wrapping and excessive reports are rejected', () => {
   assert.equal(artifactGzip(zipSync({ 'job.json': [strToU8(payload), { level: 0 }] })), undefined);
   assert.throws(() => artifactGzip(zipSync({ 'job.json': new Uint8Array(2 * 1024 * 1024 + 1) })), /2 MiB/);
   const truncated = zipSync({ 'job.json': strToU8(payload) }).slice(0, -3);
   assert.equal(artifactGzip(truncated), undefined);
 });
 
-test('browser artifact mode avoids step queries and produces the original normalized UI data', async t => {
+test('default report transport avoids step queries and preserves complete browser data', async t => {
   const realFetch = globalThis.fetch; t.after(() => { globalThis.fetch = realFetch; });
   const urls = [];
   globalThis.fetch = async url => {
@@ -42,7 +42,7 @@ test('browser artifact mode avoids step queries and produces the original normal
     if (url.includes('/runs?')) return Response.json({ workflow_runs: [{ id: 1, display_title: 'Launcher SDK · test.app · abcdef123456', status: 'completed', html_url: 'https://github.com/example/runs/1' }] });
     throw new Error('unexpected upstream call: ' + url);
   };
-  const response = await worker.fetch(new Request('https://example/api/jobs/abcdef123456?format=artifact'),
+  const response = await worker.fetch(new Request('https://example/api/jobs/abcdef123456'),
     { GITHUB_OWNER: 'owner', GITHUB_REPOSITORY: 'repo', GITHUB_WORKFLOW: 'build.yml' }, {});
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-encoding'), 'gzip');
@@ -70,5 +70,38 @@ test('rejects invalid central-directory offsets and encrypted report entries', (
   ]) {
     const data = original.slice(); corrupt(new DataView(data.buffer));
     assert.throws(() => artifactGzip(data));
+  }
+});
+
+
+test('stored reports remain complete without Worker inflation; query parameters cannot revive the legacy path', async t => {
+  const realFetch=globalThis.fetch;t.after(()=>{globalThis.fetch=realFetch;});
+  globalThis.fetch=async url=>{
+    if(url.includes('/artifacts/8/zip'))return new Response(zipSync({'job.json':[strToU8(payload),{level:0}]}));
+    if(url.includes('/artifacts?'))return Response.json({artifacts:[{id:8,name:'launcher-sdk-abcdef123456',expired:false}]});
+    if(url.includes('/runs?'))return Response.json({workflow_runs:[{id:1,display_title:'Launcher SDK · test.app · abcdef123456',status:'completed',html_url:'https://github.com/example/runs/1'}]});
+    throw new Error('unexpected '+url);
+  };
+  for(const suffix of ['', '?format=json', '?format=artifact']){
+    const response=await worker.fetch(new Request('https://example/api/jobs/abcdef123456'+suffix),
+      {GITHUB_OWNER:'owner',GITHUB_REPOSITORY:'repo',GITHUB_WORKFLOW:'build.yml'},{});
+    assert.equal(response.status,200);assert.equal(response.headers.get('content-encoding'),null);
+    assert.equal(response.headers.get('X-Launcher-Report'),'artifact');assert.equal(await response.text(),payload);
+  }
+});
+
+test('queued, running, failed and expired jobs retain status handling', async t => {
+  const realFetch=globalThis.fetch;t.after(()=>{globalThis.fetch=realFetch;});
+  for(const [status,conclusion,expected] of [[null,null,'queued'],['in_progress',null,'running'],['completed','failure','failed'],['completed','success','completed']]){
+    globalThis.fetch=async url=>{
+      if(url.includes('/runs?'))return Response.json({workflow_runs:status?[{id:1,display_title:'Launcher SDK · test.app · abcdef123456',status,conclusion,html_url:'https://github.com/example/runs/1'}]:[]});
+      if(url.includes('/artifacts?'))return Response.json({artifacts:[]});
+      if(url.includes('/jobs?'))return Response.json({jobs:[{steps:[{name:'Build',status:'in_progress'}]}]});
+      throw new Error('unexpected '+url);
+    };
+    const response=await worker.fetch(new Request('https://example/api/jobs/abcdef123456'),
+      {GITHUB_OWNER:'owner',GITHUB_REPOSITORY:'repo',GITHUB_WORKFLOW:'build.yml'},{});
+    assert.equal(response.status,200);const body=await response.json();assert.equal(body.state,expected);
+    if(status==='completed' && conclusion==='success')assert.equal(body.resultAvailable,false);
   }
 });
