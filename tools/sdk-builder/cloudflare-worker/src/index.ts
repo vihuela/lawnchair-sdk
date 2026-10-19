@@ -1,4 +1,4 @@
-import { strFromU8, unzipSync } from "fflate";
+import { Unzip, UnzipPassThrough } from "fflate";
 
 interface Env {
   ASSETS: Fetcher;
@@ -150,11 +150,50 @@ async function downloadArtifact(env: Env, artifact: Artifact): Promise<ArrayBuff
   return response.arrayBuffer();
 }
 
+// Let fflate parse ZIP records, but use the runtime's native inflater instead
+// of spending the free-tier CPU budget on a JavaScript DEFLATE implementation.
+class RawDeflate extends UnzipPassThrough {
+  static compression = 8;
+}
+
+export async function extractArtifactJob(data: Uint8Array): Promise<string> {
+  const maxSize = 2 * 1024 * 1024;
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let compression: number | undefined;
+  let finished = false;
+  const archive = new Unzip(file => {
+    if (compression !== undefined || !(file.name === "job.json" || file.name.endsWith("/job.json"))) return;
+    if ((file.originalSize || 0) > maxSize) throw new Error("CI 的 job.json 超过 2 MiB 限制");
+    if (file.compression !== 0 && file.compression !== 8) throw new Error("CI 产物使用了不支持的 ZIP 压缩格式");
+    compression = file.compression;
+    file.ondata = (error, chunk, final) => {
+      if (error) throw error;
+      chunks.push(Uint8Array.from(chunk));
+      finished = final;
+    };
+    file.start();
+  });
+  archive.register(RawDeflate);
+  archive.push(data, true);
+  if (compression === undefined) throw new Error("CI 产物中缺少 job.json");
+  if (!finished) throw new Error("CI 的 job.json 数据不完整");
+  let stream = new Blob(chunks).stream();
+  if (compression === 8) stream = stream.pipeThrough(new DecompressionStream("deflate-raw"));
+  let bytes = 0;
+  // Streaming ZIPs may omit originalSize. Enforce the limit on actual output too.
+  const bounded = stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      if (bytes > maxSize) throw new Error("CI 的 job.json 超过 2 MiB 限制");
+      controller.enqueue(chunk);
+    },
+  }));
+  return new Response(bounded).text();
+}
+
 async function readArtifactJob(env: Env, artifact: Artifact): Promise<Record<string, unknown>> {
-  const archive = unzipSync(new Uint8Array(await downloadArtifact(env, artifact)));
-  const jobName = Object.keys(archive).find(name => name === "job.json" || name.endsWith("/job.json"));
-  if (!jobName) throw new Error("CI 产物中缺少 job.json");
-  return JSON.parse(strFromU8(archive[jobName])) as Record<string, unknown>;
+  const text = await extractArtifactJob(new Uint8Array(await downloadArtifact(env, artifact)));
+  return JSON.parse(text) as Record<string, unknown>;
 }
 
 async function runProgress(env: Env, run: WorkflowRun): Promise<{ progress: number; message: string; log: string[] }> {
@@ -270,7 +309,7 @@ async function buildResponse(request: Request, env: Env, context: ExecutionConte
   }, 202);
 }
 
-async function jobResponse(env: Env, jobId: string): Promise<Response> {
+async function jobResponse(env: Env, jobId: string, context: ExecutionContext): Promise<Response> {
   const run = await findRun(env, jobId);
   if (!run) {
     return json({ id: jobId, state: "queued", progress: 3, message: "等待 GitHub Actions 创建任务", log: [] });
@@ -304,13 +343,23 @@ async function jobResponse(env: Env, jobId: string): Promise<Response> {
     return json({ id: jobId, state: "failed", progress: 100, message: "GitHub Actions 构建失败", error: `CI 结论：${run.conclusion || "unknown"}`, log: progress.log, actionsUrl: run.html_url });
   }
 
+  // Validate artifact existence above, then stream an already formatted report
+  // on repeat lookups. Avoid parsing/stringifying the ~300 KB build log again.
+  const cache = await caches.open("launcher-packer-job-response-v2");
+  const key = new Request(`https://launcher-packer-artifact.invalid/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPOSITORY)}/${artifact.id}/${run.id}/${jobId}`);
+  const hit = await cache.match(key);
+  if (hit) return new Response(hit.body, { headers: JSON_HEADERS });
   const job = await readArtifactJob(env, artifact);
   if (job.state !== "completed" || !job.result) {
     return json({ ...job, actionsUrl: run.html_url, log: Array.isArray(job.log) ? job.log : progress.log });
   }
   const result = job.result as Record<string, unknown>;
   result.downloads = [];
-  return json({ ...job, state: "completed", progress: 100, message: "GitHub Actions 构建并发布完成", result, actionsUrl: run.html_url });
+  const response = json({ ...job, state: "completed", progress: 100, message: "GitHub Actions 构建并发布完成", result, actionsUrl: run.html_url });
+  const stored = new Response(response.clone().body, response);
+  stored.headers.set("Cache-Control", "max-age=600");
+  context.waitUntil(cache.put(key, stored));
+  return response;
 }
 
 async function withSecurityHeaders(response: Response): Promise<Response> {
@@ -326,13 +375,13 @@ export default {
   async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/api/config") return configResponse(env);
-      if (request.method === "GET" && url.pathname === "/api/history") return historyResponse(request, env);
-      if (request.method === "POST" && url.pathname === "/api/package-version") return packageVersionResponse(request, env);
-      if (request.method === "POST" && url.pathname === "/api/build") return buildResponse(request, env, context);
+      if (request.method === "GET" && url.pathname === "/api/config") return await configResponse(env);
+      if (request.method === "GET" && url.pathname === "/api/history") return await historyResponse(request, env);
+      if (request.method === "POST" && url.pathname === "/api/package-version") return await packageVersionResponse(request, env);
+      if (request.method === "POST" && url.pathname === "/api/build") return await buildResponse(request, env, context);
 
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f]{12})\/?$/);
-      if (request.method === "GET" && jobMatch) return jobResponse(env, jobMatch[1]);
+      if (request.method === "GET" && jobMatch) return await jobResponse(env, jobMatch[1], context);
       if (url.pathname.startsWith("/api/")) return json({ error: "接口不存在" }, 404);
 
       return withSecurityHeaders(await env.ASSETS.fetch(request));
