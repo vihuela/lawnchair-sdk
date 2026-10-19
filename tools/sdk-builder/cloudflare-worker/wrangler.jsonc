@@ -3,6 +3,23 @@
   "name": "launcher-packer",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-26",
+  "workers_dev": false,
+  "preview_urls": false,
+  // Keep every invocation for rare resource-limit errors. No application console
+  // logs or tracing spans: normally one event/request. Recheck the shared budget
+  // before adding logs: Free currently has 200k events/day; from 2026-12-01,
+  // logs share a 0.5 GB/day ingestion allowance with other observability data.
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": false
+    }
+  },
   "assets": {
     "directory": "../static",
     "binding": "ASSETS",
